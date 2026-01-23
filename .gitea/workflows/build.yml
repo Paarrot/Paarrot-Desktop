@@ -157,15 +157,25 @@ jobs:
           $signedApk = "src-tauri/gen/android/app/build/outputs/apk/universal/release/cinny-release.apk"
           $keystore = "$env:USERPROFILE\.android\debug.keystore"
           
+          # Find Android SDK
+          $androidHome = if ($env:ANDROID_HOME) { $env:ANDROID_HOME } 
+                         elseif ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT }
+                         elseif (Test-Path "$env:LOCALAPPDATA\Android\Sdk") { "$env:LOCALAPPDATA\Android\Sdk" }
+                         else { "$env:USERPROFILE\AppData\Local\Android\Sdk" }
+          
+          Write-Host "Using Android SDK at: $androidHome"
+          
           # Use debug keystore for signing (create if missing)
           if (-not (Test-Path $keystore)) {
             keytool -genkey -v -keystore $keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           }
           
           # Find build tools
-          $buildTools = Get-ChildItem "$env:ANDROID_HOME\build-tools" | Sort-Object Name -Descending | Select-Object -First 1
+          $buildTools = Get-ChildItem "$androidHome\build-tools" | Sort-Object Name -Descending | Select-Object -First 1
           $apksigner = "$($buildTools.FullName)\apksigner.bat"
           $zipalign = "$($buildTools.FullName)\zipalign.exe"
+          
+          Write-Host "Using build tools: $($buildTools.FullName)"
           
           # Align the APK
           & $zipalign -v -p 4 $unsignedApk "$unsignedApk.aligned"
