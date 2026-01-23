@@ -45,7 +45,8 @@
         "wix": {
           "bannerPath": "wix/banner.bmp",
           "dialogImagePath": "wix/dialogImage.bmp"
-        }
+        },
+        "nsis": null
       }
     },
     "updater": {
