@@ -97,3 +97,59 @@ jobs:
         with:
           name: linux-rpm
           path: src-tauri/target/release/bundle/rpm/*.rpm
+
+  build-android:
+    runs-on: windows
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+      
+      - name: Add Android targets
+        run: |
+          rustup target add aarch64-linux-android
+          rustup target add armv7-linux-androideabi
+          rustup target add x86_64-linux-android
+          rustup target add i686-linux-android
+      
+      - name: Install dependencies (root)
+        run: npm install
+      
+      - name: Install dependencies (cinny)
+        working-directory: ./cinny
+        run: npm install
+      
+      - name: Initialize Android project
+        run: npm run tauri android init
+      
+      - name: Build Android APK
+        run: npm run tauri android build
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME }}
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.2.9519653
+      
+      - name: Upload APK
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
