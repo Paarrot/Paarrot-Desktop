@@ -1,12 +1,11 @@
 {
-  "$schema": "../gen/schemas/mobile-schema.json",
+  "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capability for all windows",
   "windows": ["*"],
   "permissions": [
     "core:default",
     "shell:default",
-    "notification:default",
-    "deep-link:default"
+    "notification:default"
   ]
 }
