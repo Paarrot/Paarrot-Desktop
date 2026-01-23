@@ -39,7 +39,7 @@ jobs:
         run: npm run tauri build
       
       - name: Upload MSI installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: windows-msi
           path: src-tauri/target/release/bundle/msi/*.msi
@@ -81,7 +81,7 @@ jobs:
         run: npm run tauri build
       
       - name: Upload AppImage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: linux-appimage
           path: src-tauri/target/release/bundle/appimage/*.AppImage
