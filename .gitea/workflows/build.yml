@@ -150,8 +150,13 @@ jobs:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.2.9519653
           RUSTUP_TOOLCHAIN: stable
       
+      - name: List built APKs
+        shell: powershell
+        run: Get-ChildItem -Recurse src-tauri/gen/android -Filter *.apk | Select-Object FullName
+      
       - name: Upload APK
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: android-apk
-          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
+          if-no-files-found: warn
