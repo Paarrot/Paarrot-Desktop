@@ -140,17 +140,15 @@ jobs:
         working-directory: ./cinny
         run: npm install
       
-      - name: Initialize Android project
-        run: npm run tauri android init
-      
       - name: Build Android APK
-        shell: cmd
+        shell: pwsh
         run: |
-          set RUSTUP_TOOLCHAIN=stable
+          $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
           npm run tauri android build
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME }}
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.2.9519653
+          RUSTUP_TOOLCHAIN: stable
       
       - name: Upload APK
         uses: actions/upload-artifact@v3
