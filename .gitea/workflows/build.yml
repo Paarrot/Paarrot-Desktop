@@ -38,11 +38,18 @@ jobs:
       - name: Build Tauri app
         run: npm run tauri build
       
+      - name: Rename MSI
+        shell: powershell
+        run: |
+          $msi = Get-ChildItem "src-tauri/target/release/bundle/msi/*.msi" | Select-Object -First 1
+          $newName = "Cinny-Windows-x64.msi"
+          Copy-Item $msi.FullName "src-tauri/target/release/bundle/msi/$newName"
+      
       - name: Upload MSI installer
         uses: actions/upload-artifact@v3
         with:
-          name: windows-msi
-          path: src-tauri/target/release/bundle/msi/*.msi
+          name: Cinny-Windows-x64.msi
+          path: src-tauri/target/release/bundle/msi/Cinny-Windows-x64.msi
 
   build-linux:
     runs-on: ubuntu-latest
@@ -80,23 +87,29 @@ jobs:
       - name: Build Tauri app
         run: npm run tauri build
       
+      - name: Rename Linux packages
+        run: |
+          cp src-tauri/target/release/bundle/appimage/*.AppImage src-tauri/target/release/bundle/appimage/Cinny-Linux-x64.AppImage
+          cp src-tauri/target/release/bundle/deb/*.deb src-tauri/target/release/bundle/deb/Cinny-Linux-x64.deb
+          cp src-tauri/target/release/bundle/rpm/*.rpm src-tauri/target/release/bundle/rpm/Cinny-Linux-x64.rpm
+      
       - name: Upload AppImage
         uses: actions/upload-artifact@v3
         with:
-          name: linux-appimage
-          path: src-tauri/target/release/bundle/appimage/*.AppImage
+          name: Cinny-Linux-x64.AppImage
+          path: src-tauri/target/release/bundle/appimage/Cinny-Linux-x64.AppImage
       
       - name: Upload DEB package
         uses: actions/upload-artifact@v3
         with:
-          name: linux-deb
-          path: src-tauri/target/release/bundle/deb/*.deb
+          name: Cinny-Linux-x64.deb
+          path: src-tauri/target/release/bundle/deb/Cinny-Linux-x64.deb
       
       - name: Upload RPM package
         uses: actions/upload-artifact@v3
         with:
-          name: linux-rpm
-          path: src-tauri/target/release/bundle/rpm/*.rpm
+          name: Cinny-Linux-x64.rpm
+          path: src-tauri/target/release/bundle/rpm/Cinny-Linux-x64.rpm
 
   build-android:
     runs-on: windows
@@ -187,9 +200,12 @@ jobs:
           & $apksigner verify $signedApk
           
           Write-Host "Signed APK created at: $signedApk"
+          
+          # Rename to final name
+          Copy-Item $signedApk "src-tauri/gen/android/app/build/outputs/apk/universal/release/Cinny-Android.apk"
       
       - name: Upload APK
         uses: actions/upload-artifact@v3
         with:
-          name: android-apk
-          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/cinny-release.apk
+          name: Cinny-Android.apk
+          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/Cinny-Android.apk
