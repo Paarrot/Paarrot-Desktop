@@ -25,6 +25,11 @@
       "csp": "script-src blob: data: filesystem: ws: wss: http: https: tauri: 'unsafe-eval' 'unsafe-inline' 'self'; img-src 'self' https: http: data: blob:"
     }
   },
+  "plugins": {
+    "notification": {
+      "sound": true
+    }
+  },
   "bundle": {
     "active": true,
     "targets": ["msi", "appimage", "deb", "rpm"],
