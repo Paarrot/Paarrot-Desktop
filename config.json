@@ -10,6 +10,10 @@
   ],
   "allowCustomHomeservers": true,
 
+  "calling": {
+    "livekitServiceUrl": "https://b.ruv.wtf/matrix-rtc/livekit/jwt"
+  },
+
   "featuredCommunities": {
     "openAsDefault": false,
     "spaces": [
