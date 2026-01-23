@@ -150,12 +150,36 @@ jobs:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/25.2.9519653
           RUSTUP_TOOLCHAIN: stable
       
-      - name: List built APKs
+      - name: Sign APK
         shell: powershell
-        run: Get-ChildItem -Recurse src-tauri/gen/android -Filter *.apk | Select-Object FullName
+        run: |
+          $unsignedApk = "src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk"
+          $signedApk = "src-tauri/gen/android/app/build/outputs/apk/universal/release/cinny-release.apk"
+          $keystore = "$env:USERPROFILE\.android\debug.keystore"
+          
+          # Use debug keystore for signing (create if missing)
+          if (-not (Test-Path $keystore)) {
+            keytool -genkey -v -keystore $keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          }
+          
+          # Find build tools
+          $buildTools = Get-ChildItem "$env:ANDROID_HOME\build-tools" | Sort-Object Name -Descending | Select-Object -First 1
+          $apksigner = "$($buildTools.FullName)\apksigner.bat"
+          $zipalign = "$($buildTools.FullName)\zipalign.exe"
+          
+          # Align the APK
+          & $zipalign -v -p 4 $unsignedApk "$unsignedApk.aligned"
+          
+          # Sign the APK
+          & $apksigner sign --ks $keystore --ks-pass pass:android --key-pass pass:android --out $signedApk "$unsignedApk.aligned"
+          
+          # Verify
+          & $apksigner verify $signedApk
+          
+          Write-Host "Signed APK created at: $signedApk"
       
       - name: Upload APK
         uses: actions/upload-artifact@v3
         with:
           name: android-apk
-          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
+          path: src-tauri/gen/android/app/build/outputs/apk/universal/release/cinny-release.apk
