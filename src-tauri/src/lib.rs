@@ -18,6 +18,7 @@ pub fn run() {
             .plugin(tauri_plugin_window_state::Builder::default().build())
             .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
             .plugin(tauri_plugin_notification::init())
+            .plugin(tauri_plugin_updater::Builder::new().build())
     };
 
     #[cfg(any(target_os = "android", target_os = "ios"))]

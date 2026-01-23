@@ -28,6 +28,12 @@
   "plugins": {
     "notification": {
       "sound": true
+    },
+    "updater": {
+      "endpoints": [
+        "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/download/latest/update.json"
+      ],
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDExREU1NkVBMDY4MzcxMjAKUldRZ2NZTUc2bGJlRVNaQldnMXpJcHlocVpCWUNNaUdicjBGMVRsck1GQXhvTnJiOUNhVVRHSzQK"
     }
   },
   "bundle": {
