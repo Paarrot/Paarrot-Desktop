@@ -26,9 +26,6 @@
     }
   },
   "plugins": {
-    "notification": {
-      "sound": true
-    },
     "updater": {
       "endpoints": [
         "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/download/latest/update.json"

@@ -3,15 +3,11 @@
 #[cfg(mobile)]
 mod mobile;
 
-#[cfg(mobile)]
-pub use mobile::*;
-
 /// Runs the Tauri application
 pub fn run() {
-    let port = 44548;
-
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    let builder = {
+    {
+        let port = 44548;
         tauri::Builder::default()
             .plugin(tauri_plugin_localhost::Builder::new(port).build())
             .plugin(tauri_plugin_shell::init())
@@ -19,17 +15,17 @@ pub fn run() {
             .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
             .plugin(tauri_plugin_notification::init())
             .plugin(tauri_plugin_updater::Builder::new().build())
-    };
+            .run(tauri::generate_context!())
+            .expect("error while building tauri application");
+    }
 
     #[cfg(any(target_os = "android", target_os = "ios"))]
-    let builder = {
+    {
         tauri::Builder::default()
-            .plugin(tauri_plugin_localhost::Builder::new(port).build())
             .plugin(tauri_plugin_shell::init())
             .plugin(tauri_plugin_notification::init())
-    };
-
-    builder
-        .run(tauri::generate_context!())
-        .expect("error while building tauri application");
+            .plugin(tauri_plugin_deep_link::init())
+            .run(tauri::generate_context!())
+            .expect("error while building tauri application");
+    }
 }
