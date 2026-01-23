@@ -167,13 +167,18 @@ jobs:
       
       - name: Rename Linux packages
         run: |
-          cp src-tauri/target/release/bundle/appimage/*.AppImage src-tauri/target/release/bundle/appimage/Cinny-Linux-x64.AppImage
-          cp src-tauri/target/release/bundle/deb/*.deb src-tauri/target/release/bundle/deb/Cinny-Linux-x64.deb
-          cp src-tauri/target/release/bundle/rpm/*.rpm src-tauri/target/release/bundle/rpm/Cinny-Linux-x64.rpm
-          # Copy signature file for updater
-          if [ -f src-tauri/target/release/bundle/appimage/*.AppImage.sig ]; then
-            cp src-tauri/target/release/bundle/appimage/*.AppImage.sig src-tauri/target/release/bundle/appimage/Cinny-Linux-x64.AppImage.sig
+          # Find and copy each file individually to avoid glob issues
+          find src-tauri/target/release/bundle/appimage -name "*.AppImage" -not -name "Cinny-Linux*" | head -1 | xargs -I {} cp {} src-tauri/target/release/bundle/appimage/Cinny-Linux-x64.AppImage
+          find src-tauri/target/release/bundle/deb -name "*.deb" -not -name "Cinny-Linux*" | head -1 | xargs -I {} cp {} src-tauri/target/release/bundle/deb/Cinny-Linux-x64.deb
+          find src-tauri/target/release/bundle/rpm -name "*.rpm" -not -name "Cinny-Linux*" | head -1 | xargs -I {} cp {} src-tauri/target/release/bundle/rpm/Cinny-Linux-x64.rpm
+          # Copy signature file for updater if it exists
+          if ls src-tauri/target/release/bundle/appimage/*.AppImage.sig 1> /dev/null 2>&1; then
+            find src-tauri/target/release/bundle/appimage -name "*.AppImage.sig" -not -name "Cinny-Linux*" | head -1 | xargs -I {} cp {} src-tauri/target/release/bundle/appimage/Cinny-Linux-x64.AppImage.sig
           fi
+          # List what we have
+          ls -la src-tauri/target/release/bundle/appimage/
+          ls -la src-tauri/target/release/bundle/deb/
+          ls -la src-tauri/target/release/bundle/rpm/
       
       - name: Upload AppImage
         uses: actions/upload-artifact@v3
