@@ -157,10 +157,58 @@ jobs:
             src-tauri/target/universal-apple-darwin/release/bundle/macos/Cinny_desktop-universal.app.tar.gz
             src-tauri/target/universal-apple-darwin/release/bundle/macos/Cinny_desktop-universal.app.tar.gz.sig
 
+  # Android ARM64
+  android-arm64:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4.2.0
+        with: 
+          submodules: true
+      - name: Setup node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: 20.12.2
+          cache: 'npm'
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - name: Install NDK
+        run: sdkmanager "ndk;27.0.11902837"
+      - name: Install cinny dependencies
+        run: cd cinny && npm ci
+      - name: Install tauri dependencies
+        run: npm ci
+      - name: Install Tauri CLI
+        run: npm install -g @tauri-apps/cli
+      - name: Build Android app
+        run: tauri android build --target aarch64-linux-android
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.11902837
+          NODE_OPTIONS: "--max_old_space_size=4096"
+      - name: Get app version
+        id: vars
+        run: echo "tag=$(jq .package.version src-tauri/tauri.conf.json | tr -d '"')" >> $GITHUB_OUTPUT
+      - name: Move APK
+        run: mv "src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk" "src-tauri/gen/android/app/build/outputs/apk/universal/release/Cinny_desktop-arm64.apk" || true
+      - name: Upload tagged release
+        uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836
+        with:
+          files: |
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/Cinny_desktop-arm64.apk
+
   # Upload release.json
   release-update:
     if: always()
-    needs: [windows-x86_64, linux-x86_64, macos-universal]
+    needs: [windows-x86_64, linux-x86_64, macos-universal, android-arm64]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
