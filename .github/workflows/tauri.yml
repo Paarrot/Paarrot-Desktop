@@ -30,6 +30,8 @@ jobs:
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           NODE_OPTIONS: "--max_old_space_size=4096"
+          CARGO_BUILD_JOBS: "16"
+          RUSTFLAGS: "-C codegen-units=16"
         with:
           releaseId: ${{ github.event.release.upload_url }}
       - name: Get app version (windows)
@@ -87,6 +89,8 @@ jobs:
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           NODE_OPTIONS: "--max_old_space_size=4096"
+          CARGO_BUILD_JOBS: "16"
+          RUSTFLAGS: "-C codegen-units=16"
         with:
           releaseId: ${{ github.event.release.upload_url }}
       - name: Get app version
@@ -137,6 +141,8 @@ jobs:
           TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
           TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
           NODE_OPTIONS: "--max_old_space_size=4096"
+          CARGO_BUILD_JOBS: "16"
+          RUSTFLAGS: "-C codegen-units=16"
         with:
           releaseId: ${{ github.event.release.upload_url }}
           args: "--target universal-apple-darwin"
@@ -194,6 +200,8 @@ jobs:
         env:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.0.11902837
           NODE_OPTIONS: "--max_old_space_size=4096"
+          CARGO_BUILD_JOBS: "16"
+          RUSTFLAGS: "-C codegen-units=16"
       - name: Get app version
         id: vars
         run: echo "tag=$(jq .package.version src-tauri/tauri.conf.json | tr -d '"')" >> $GITHUB_OUTPUT
