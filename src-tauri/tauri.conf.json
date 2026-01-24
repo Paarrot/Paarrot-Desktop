@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Cinny",
+  "productName": "Paarrot",
   "version": "4.10.8",
-  "identifier": "in.cinny.app",
+  "identifier": "wtf.ruv.paarrot",
   "build": {
     "frontendDist": "../cinny/dist",
     "devUrl": "http://localhost:8080",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Cinny",
+        "title": "Paarrot",
         "width": 1280,
         "height": 905,
         "center": true,

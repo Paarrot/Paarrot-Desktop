@@ -4,5 +4,5 @@
 )]
 
 fn main() {
-    cinny_lib::run();
+    paarrot_lib::run();
 }

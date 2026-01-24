@@ -1,6 +1,5 @@
-package `in`.cinny.app
+package wtf.ruv.paarrot
 
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -13,30 +12,15 @@ import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 
 /**
- * Foreground service to keep Matrix sync connection alive in background.
- * This service maintains a wake lock and shows a persistent notification
- * to prevent Android from killing the app while syncing.
+ * Foreground service that keeps the app alive for background sync.
+ * This allows Matrix sync to continue even when the app is in the background.
  */
 class SyncService : Service() {
-
     companion object {
-        private const val CHANNEL_ID = "cinny_sync_channel"
-        private const val NOTIFICATION_ID = 1001
-        private const val WAKE_LOCK_TAG = "Cinny:SyncWakeLock"
-
-        fun start(context: Context) {
-            val intent = Intent(context, SyncService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
-        }
-
-        fun stop(context: Context) {
-            val intent = Intent(context, SyncService::class.java)
-            context.stopService(intent)
-        }
+        private const val NOTIFICATION_ID = 1
+        private const val CHANNEL_ID = "paarrot_sync_channel"
+        private const val CHANNEL_NAME = "Background Sync"
+        private const val WAKE_LOCK_TAG = "Paarrot:SyncWakeLock"
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
@@ -50,8 +34,7 @@ class SyncService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val notification = createNotification()
-        startForeground(NOTIFICATION_ID, notification)
+        startForeground(NOTIFICATION_ID, createNotification())
         return START_STICKY
     }
 
@@ -64,32 +47,33 @@ class SyncService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Matrix Sync",
+                CHANNEL_NAME,
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Keeps Cinny connected for message notifications"
+                description = "Keeps Paarrot connected for message notifications"
                 setShowBadge(false)
             }
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+            
+            val notificationManager = getSystemService(NotificationManager::class.java)
+            notificationManager.createNotificationChannel(channel)
         }
     }
 
-    private fun createNotification(): Notification {
-        val intent = Intent(this, MainActivity::class.java)
+    private fun createNotification(): android.app.Notification {
         val pendingIntent = PendingIntent.getActivity(
-            this, 0, intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE
         )
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Cinny")
-            .setContentText("Connected to Matrix")
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setOngoing(true)
+            .setContentTitle("Paarrot")
+            .setContentText("Syncing messages...")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setOngoing(true)
             .build()
     }
 
@@ -99,7 +83,7 @@ class SyncService : Service() {
             PowerManager.PARTIAL_WAKE_LOCK,
             WAKE_LOCK_TAG
         ).apply {
-            acquire(10 * 60 * 1000L) // 10 minutes, will be renewed
+            acquire(10 * 60 * 1000L) // 10 minutes timeout
         }
     }
 

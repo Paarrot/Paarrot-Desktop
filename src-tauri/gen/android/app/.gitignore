@@ -1,4 +1,4 @@
-/src/main/java/in/cinny/app/generated
+/src/main/java/wtf/ruv/paarrot/generated
 /src/main/jniLibs/**/*.so
 /src/main/assets/tauri.conf.json
 /tauri.build.gradle.kts
