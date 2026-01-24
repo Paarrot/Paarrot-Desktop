@@ -469,24 +469,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6e4de3bc4ea267985becf712dc6d9eed8b04c953b3fcfb339ebc87acd9804901"
 
 [[package]]
-name = "cinny"
-version = "4.10.2"
-dependencies = [
- "ppv-lite86",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-deep-link",
- "tauri-plugin-localhost",
- "tauri-plugin-notification",
- "tauri-plugin-shell",
- "tauri-plugin-single-instance",
- "tauri-plugin-updater",
- "tauri-plugin-window-state",
-]
-
-[[package]]
 name = "combine"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2526,6 +2508,24 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "paarrot"
+version = "4.10.2"
+dependencies = [
+ "ppv-lite86",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-deep-link",
+ "tauri-plugin-localhost",
+ "tauri-plugin-notification",
+ "tauri-plugin-shell",
+ "tauri-plugin-single-instance",
+ "tauri-plugin-updater",
+ "tauri-plugin-window-state",
 ]
 
 [[package]]
