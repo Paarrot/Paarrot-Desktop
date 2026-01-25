@@ -287,9 +287,6 @@ jobs:
       - name: Add Android targets
         run: |
           rustup target add aarch64-linux-android --toolchain stable
-          rustup target add armv7-linux-androideabi --toolchain stable
-          rustup target add x86_64-linux-android --toolchain stable
-          rustup target add i686-linux-android --toolchain stable
       
       - name: Install dependencies (root)
         run: npm ci --prefer-offline
