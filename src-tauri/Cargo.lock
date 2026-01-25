@@ -2681,6 +2681,7 @@ version = "4.10.2"
 dependencies = [
  "arboard",
  "base64 0.22.1",
+ "open",
  "png 0.17.16",
  "ppv-lite86",
  "serde",

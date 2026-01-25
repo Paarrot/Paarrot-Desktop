@@ -39,6 +39,7 @@ tauri-plugin-window-state = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-autostart = "2"
+open = "5"
 
 [features]
 default = ["custom-protocol"]

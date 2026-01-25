@@ -51,6 +51,13 @@ fn read_clipboard_image() -> Result<Option<String>, String> {
     Ok(None)
 }
 
+/// Open a URL in the default browser (bypasses ACL issues with localhost plugin)
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    open::that(&url).map_err(|e| e.to_string())
+}
+
 /// Runs the Tauri application
 pub fn run() {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -157,7 +164,7 @@ pub fn run() {
                     api.prevent_close();
                 }
             })
-            .invoke_handler(tauri::generate_handler![read_clipboard_image])
+            .invoke_handler(tauri::generate_handler![read_clipboard_image, open_external_url])
             .run(tauri::generate_context!())
             .expect("error while building tauri application");
     }
