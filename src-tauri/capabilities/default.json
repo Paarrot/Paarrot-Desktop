@@ -5,7 +5,8 @@
   "windows": ["*"],
   "permissions": [
     "core:default",
-    "shell:allow-open",
-    "notification:default"
+    "opener:default",
+    "notification:default",
+    "autostart:default"
   ]
 }

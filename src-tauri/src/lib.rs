@@ -1,7 +1,15 @@
-//! Cinny Desktop library for cross-platform builds including Android
+//! Paarrot Desktop library for cross-platform builds including Android
 
 #[cfg(mobile)]
 mod mobile;
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+use tauri::{
+    Manager,
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    WindowEvent,
+};
 
 /// Read image from clipboard on Linux using arboard with Wayland support
 #[cfg(target_os = "linux")]
@@ -42,17 +50,78 @@ fn read_clipboard_image() -> Result<Option<String>, String> {
 }
 
 /// Runs the Tauri application
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
         let port = 44548;
         tauri::Builder::default()
             .plugin(tauri_plugin_localhost::Builder::new(port).build())
-            .plugin(tauri_plugin_shell::init())
+            .plugin(tauri_plugin_opener::init())
             .plugin(tauri_plugin_window_state::Builder::default().build())
-            .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
+            .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+                // When a second instance tries to launch, focus the existing window
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }))
             .plugin(tauri_plugin_notification::init())
             .plugin(tauri_plugin_updater::Builder::new().build())
+            .plugin(tauri_plugin_autostart::init(
+                tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+                Some(vec!["--minimized"]),
+            ))
+            .setup(|app| {
+                // Create system tray
+                let show_item = MenuItem::with_id(app, "show", "Show Paarrot", true, None::<&str>)?;
+                let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+                let menu = Menu::with_items(app, &[&show_item, &quit_item])?;
+
+                let _tray = TrayIconBuilder::new()
+                    .icon(app.default_window_icon().unwrap().clone())
+                    .menu(&menu)
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "show" => {
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.unminimize();
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                        "quit" => {
+                            app.exit(0);
+                        }
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            let app = tray.app_handle();
+                            if let Some(window) = app.get_webview_window("main") {
+                                let _ = window.unminimize();
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    })
+                    .build(app)?;
+
+                Ok(())
+            })
+            .on_window_event(|window, event| {
+                // Minimize to tray on close instead of quitting
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    window.hide().unwrap();
+                    api.prevent_close();
+                }
+            })
             .invoke_handler(tauri::generate_handler![read_clipboard_image])
             .run(tauri::generate_context!())
             .expect("error while building tauri application");
@@ -61,7 +130,7 @@ pub fn run() {
     #[cfg(any(target_os = "android", target_os = "ios"))]
     {
         tauri::Builder::default()
-            .plugin(tauri_plugin_shell::init())
+            .plugin(tauri_plugin_opener::init())
             .plugin(tauri_plugin_notification::init())
             .plugin(tauri_plugin_deep_link::init())
             .invoke_handler(tauri::generate_handler![read_clipboard_image])
