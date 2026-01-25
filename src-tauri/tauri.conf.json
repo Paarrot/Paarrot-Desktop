@@ -10,17 +10,8 @@
     "beforeBuildCommand": "cd cinny && npm run build"
   },
   "app": {
-    "windows": [
-      {
-        "title": "Paarrot",
-        "width": 1280,
-        "height": 905,
-        "center": true,
-        "resizable": true,
-        "fullscreen": false,
-        "dragDropEnabled": false
-      }
-    ],
+    "withGlobalTauri": true,
+    "windows": [],
     "security": {
       "csp": "script-src blob: data: filesystem: ws: wss: http: https: tauri: 'unsafe-eval' 'unsafe-inline' 'self'; img-src 'self' https: http: data: blob:"
     }

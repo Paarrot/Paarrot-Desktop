@@ -6,8 +6,10 @@ mod mobile;
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri::{
     Manager,
+    WebviewUrl,
     menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    webview::WebviewWindowBuilder,
     WindowEvent,
 };
 
@@ -72,7 +74,41 @@ pub fn run() {
                 tauri_plugin_autostart::MacosLauncher::LaunchAgent,
                 Some(vec!["--minimized"]),
             ))
-            .setup(|app| {
+            .setup(move |app| {
+                // In dev mode, use Vite dev server; in production, use localhost plugin
+                let url: tauri::Url = if cfg!(dev) {
+                    "http://localhost:8080".parse().unwrap()
+                } else {
+                    format!("http://localhost:{}", port).parse().unwrap()
+                };
+                
+                // Create the main window manually with navigation handler for external links
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+                    .title("Paarrot")
+                    .inner_size(1280.0, 905.0)
+                    .center()
+                    .resizable(true)
+                    .disable_drag_drop_handler()
+                    .on_navigation(|url| {
+                        let url_str = url.as_str();
+                        // Allow navigation to localhost (our app) and special protocols
+                        if url_str.starts_with("http://localhost") 
+                            || url_str.starts_with("https://localhost") 
+                            || url_str.starts_with("tauri://")
+                            || url_str.starts_with("blob:")
+                            || url_str.starts_with("data:")
+                        {
+                            return true;
+                        }
+                        // Block external URLs - open them in default browser
+                        if url_str.starts_with("http://") || url_str.starts_with("https://") {
+                            let _ = tauri_plugin_opener::open_url(url_str, None::<&str>);
+                            return false;
+                        }
+                        true
+                    })
+                    .build()?;
+                
                 // Create system tray
                 let show_item = MenuItem::with_id(app, "show", "Show Paarrot", true, None::<&str>)?;
                 let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
