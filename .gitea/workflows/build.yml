@@ -94,18 +94,36 @@ jobs:
       - name: Build Tauri app
         run: npm run tauri build
       
-      - name: Rename MSI
+      - name: Rename MSI files
         shell: powershell
         run: |
-          $msi = Get-ChildItem "src-tauri/target/release/bundle/msi/*.msi" | Select-Object -First 1
-          $newName = "Cinny-Windows-x64.msi"
-          Copy-Item $msi.FullName "src-tauri/target/release/bundle/msi/$newName"
+          $msi = Get-ChildItem "src-tauri/target/release/bundle/msi/*.msi" -Exclude "Cinny-*" | Select-Object -First 1
+          Copy-Item $msi.FullName "src-tauri/target/release/bundle/msi/Cinny-Windows-x64.msi"
+          $msiZip = Get-ChildItem "src-tauri/target/release/bundle/msi/*.msi.zip" -Exclude "Cinny-*" | Select-Object -First 1
+          if ($msiZip) { Copy-Item $msiZip.FullName "src-tauri/target/release/bundle/msi/Cinny-Windows-x64.msi.zip" }
+          $msiZipSig = Get-ChildItem "src-tauri/target/release/bundle/msi/*.msi.zip.sig" -Exclude "Cinny-*" | Select-Object -First 1
+          if ($msiZipSig) { Copy-Item $msiZipSig.FullName "src-tauri/target/release/bundle/msi/Cinny-Windows-x64.msi.zip.sig" }
+          Get-ChildItem "src-tauri/target/release/bundle/msi/"
       
       - name: Upload MSI installer
         uses: actions/upload-artifact@v3
         with:
           name: Cinny-Windows-x64.msi
           path: src-tauri/target/release/bundle/msi/Cinny-Windows-x64.msi
+      
+      - name: Upload MSI updater zip
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: Cinny-Windows-x64.msi.zip
+          path: src-tauri/target/release/bundle/msi/Cinny-Windows-x64.msi.zip
+      
+      - name: Upload MSI updater signature
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: Cinny-Windows-x64.msi.zip.sig
+          path: src-tauri/target/release/bundle/msi/Cinny-Windows-x64.msi.zip.sig
 
   build-linux:
     runs-on: ubuntu-latest
@@ -366,8 +384,12 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           APPIMAGE_SIG=""
+          MSI_SIG=""
           if [ -f "artifacts/Cinny-Linux-x64.AppImage.sig/Cinny-Linux-x64.AppImage.sig" ]; then
             APPIMAGE_SIG=$(cat "artifacts/Cinny-Linux-x64.AppImage.sig/Cinny-Linux-x64.AppImage.sig")
+          fi
+          if [ -f "artifacts/Cinny-Windows-x64.msi.zip.sig/Cinny-Windows-x64.msi.zip.sig" ]; then
+            MSI_SIG=$(cat "artifacts/Cinny-Windows-x64.msi.zip.sig/Cinny-Windows-x64.msi.zip.sig")
           fi
           
           cat > update.json << EOF
@@ -379,6 +401,10 @@ jobs:
               "linux-x86_64": {
                 "signature": "${APPIMAGE_SIG}",
                 "url": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/download/v${VERSION}/Cinny-Linux-x64.AppImage"
+              },
+              "windows-x86_64": {
+                "signature": "${MSI_SIG}",
+                "url": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/download/v${VERSION}/Cinny-Windows-x64.msi.zip"
               }
             }
           }
@@ -389,7 +415,7 @@ jobs:
         run: |
           mkdir -p release-files
           # Move artifacts out of subdirectories
-          find artifacts -type f \( -name "*.msi" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.apk" -o -name "*.sig" \) -exec cp {} release-files/ \;
+          find artifacts -type f \( -name "*.msi" -o -name "*.msi.zip" -o -name "*.msi.zip.sig" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.apk" -o -name "*.sig" \) -exec cp {} release-files/ \;
           cp update.json release-files/
           ls -la release-files/
       
