@@ -6,11 +6,7 @@
   "platforms": ["linux", "windows", "macOS"],
   "permissions": [
     "core:default",
-    "opener:default",
-    {
-      "identifier": "opener:allow-open-url",
-      "allow": [{ "url": "http://**" }, { "url": "https://**" }]
-    },
+    "opener:allow-default-urls",
     "notification:default",
     "autostart:default"
   ]
