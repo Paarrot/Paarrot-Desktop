@@ -50,7 +50,6 @@ fn read_clipboard_image() -> Result<Option<String>, String> {
 }
 
 /// Runs the Tauri application
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     {
