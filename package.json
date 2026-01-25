@@ -7,7 +7,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
-    "tauri": "powershell Copy-Item config.json cinny/; tauri",
+    "tauri": "node -e \"require('fs').copyFileSync('config.json', 'cinny/config.json')\" && tauri",
     "release": "node scripts/release.mjs"
   },
   "keywords": [],
