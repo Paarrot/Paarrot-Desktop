@@ -2,10 +2,12 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capability for all windows",
-  "windows": ["*"],
+  "windows": ["main"],
   "platforms": ["linux", "windows", "macOS"],
   "permissions": [
     "core:default",
+    "opener:default",
+    "opener:allow-open-url",
     "opener:allow-default-urls",
     "notification:default",
     "autostart:default"
