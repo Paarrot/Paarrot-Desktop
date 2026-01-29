@@ -6,7 +6,6 @@
   "platforms": ["android", "iOS"],
   "permissions": [
     "core:default",
-    "shell:allow-open",
     "notification:default",
     "deep-link:default"
   ]
