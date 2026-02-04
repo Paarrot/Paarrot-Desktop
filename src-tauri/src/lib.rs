@@ -13,6 +13,12 @@ use tauri::{
     WindowEvent,
 };
 
+// Linux: Import for permission handling
+#[cfg(target_os = "linux")]
+use webkit2gtk::{PermissionRequestExt, WebViewExt};
+#[cfg(target_os = "linux")]
+use gtk::prelude::*;
+
 /// Read image from clipboard on Linux using arboard with Wayland support
 #[cfg(target_os = "linux")]
 #[tauri::command]
@@ -116,6 +122,35 @@ pub fn run() {
                     })
                     .build()?;
                 
+                // Linux: Set up permission handler to auto-allow microphone/camera access
+                #[cfg(target_os = "linux")]
+                {
+                    if let Some(webview_window) = app.get_webview_window("main") {
+                        let _ = webview_window.with_webview(|webview| {
+                            use webkit2gtk::UserMediaPermissionRequestExt;
+                            
+                            let wv = webview.inner();
+                            wv.connect_permission_request(|_webview, permission_request| {
+                                // Check if this is a user media (microphone/camera) permission request
+                                if let Some(user_media_request) = permission_request.downcast_ref::<webkit2gtk::UserMediaPermissionRequest>() {
+                                    // Log what's being requested
+                                    let is_audio = user_media_request.is_for_audio_device();
+                                    let is_video = user_media_request.is_for_video_device();
+                                    eprintln!("Paarrot: Media permission request - audio: {}, video: {}", is_audio, is_video);
+                                    
+                                    // Allow the request
+                                    permission_request.allow();
+                                    return true;
+                                }
+                                
+                                // For other permission types, allow by default
+                                permission_request.allow();
+                                true
+                            });
+                        });
+                    }
+                }
+                
                 // Create system tray
                 let show_item = MenuItem::with_id(app, "show", "Show Paarrot", true, None::<&str>)?;
                 let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
@@ -171,10 +206,19 @@ pub fn run() {
 
     #[cfg(any(target_os = "android", target_os = "ios"))]
     {
+        use tauri::{WebviewUrl, webview::WebviewWindowBuilder};
+        
         tauri::Builder::default()
             .plugin(tauri_plugin_opener::init())
             .plugin(tauri_plugin_notification::init())
             .plugin(tauri_plugin_deep_link::init())
+            .setup(|app| {
+                // Create the main window for mobile
+                // Mobile uses the bundled assets directly, not localhost
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
+                    .build()?;
+                Ok(())
+            })
             .invoke_handler(tauri::generate_handler![read_clipboard_image])
             .run(tauri::generate_context!())
             .expect("error while building tauri application");

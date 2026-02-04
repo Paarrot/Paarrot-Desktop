@@ -29,6 +29,8 @@ tauri-plugin-notification = "2"
 arboard = { version = "3", features = ["wayland-data-control"] }
 png = "0.17"
 base64 = "0.22"
+webkit2gtk = "2.0"
+gtk = "0.18"
 
 [target."cfg(any(target_os = \"android\", target_os = \"ios\"))".dependencies]
 tauri-plugin-deep-link = "2"

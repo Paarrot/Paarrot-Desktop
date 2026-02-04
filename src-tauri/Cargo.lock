@@ -2681,6 +2681,7 @@ version = "4.10.2"
 dependencies = [
  "arboard",
  "base64 0.22.1",
+ "gtk",
  "open",
  "png 0.17.16",
  "ppv-lite86",
@@ -2696,6 +2697,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
+ "webkit2gtk",
 ]
 
 [[package]]
