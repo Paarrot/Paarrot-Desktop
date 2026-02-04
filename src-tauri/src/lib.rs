@@ -213,9 +213,27 @@ pub fn run() {
             .plugin(tauri_plugin_notification::init())
             .plugin(tauri_plugin_deep_link::init())
             .setup(|app| {
-                // Create the main window for mobile
-                // Mobile uses the bundled assets directly, not localhost
+                // Create the main window for mobile with navigation handler for external links
                 WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
+                    .on_navigation(|url| {
+                        let url_str = url.as_str();
+                        // Allow navigation to app resources and special protocols
+                        if url_str.starts_with("tauri://")
+                            || url_str.starts_with("http://tauri.localhost")
+                            || url_str.starts_with("https://tauri.localhost")
+                            || url_str.starts_with("blob:")
+                            || url_str.starts_with("data:")
+                            || url_str.starts_with("about:")
+                        {
+                            return true;
+                        }
+                        // External URLs - open in default browser
+                        if url_str.starts_with("http://") || url_str.starts_with("https://") {
+                            let _ = tauri_plugin_opener::open_url(url_str, None::<&str>);
+                            return false;
+                        }
+                        true
+                    })
                     .build()?;
                 Ok(())
             })
