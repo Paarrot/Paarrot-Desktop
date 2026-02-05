@@ -3,6 +3,11 @@
 #[cfg(mobile)]
 mod mobile;
 
+#[cfg(any(target_os = "android", target_os = "ios"))]
+mod background_sync;
+#[cfg(any(target_os = "android", target_os = "ios"))]
+mod matrix_sync;
+
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 use tauri::{
     Manager,
@@ -62,6 +67,96 @@ fn read_clipboard_image() -> Result<Option<String>, String> {
 #[tauri::command]
 fn open_external_url(url: String) -> Result<(), String> {
     open::that(&url).map_err(|e| e.to_string())
+}
+
+/// Open a URL in the default browser on mobile platforms
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[tauri::command]
+fn open_external_url(url: String) -> Result<(), String> {
+    tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|e| e.to_string())
+}
+
+/// Start background Matrix sync with the given credentials (mobile only)
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[tauri::command]
+async fn start_background_sync(
+    app_handle: tauri::AppHandle,
+    homeserver_url: String,
+    user_id: String,
+    access_token: String,
+    device_id: String,
+) -> Result<(), String> {
+    use crate::background_sync::{MatrixCredentials, get_sync_manager};
+    use crate::matrix_sync::{init_client, run_sync_loop};
+    
+    let credentials = MatrixCredentials {
+        homeserver_url,
+        user_id,
+        access_token,
+        device_id,
+    };
+
+    // Set credentials
+    let manager = get_sync_manager();
+    manager.set_credentials(credentials.clone()).await;
+
+    // Initialize the Matrix client
+    init_client(&credentials).await?;
+
+    // Start sync in background task
+    let app = app_handle.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = run_sync_loop(app).await {
+            log::error!("Sync loop error: {}", e);
+        }
+    });
+
+    Ok(())
+}
+
+/// Stop background Matrix sync (mobile only)
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[tauri::command]
+async fn stop_background_sync() -> Result<(), String> {
+    crate::matrix_sync::stop_sync().await;
+    Ok(())
+}
+
+/// Get background sync state (mobile only)
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[tauri::command]
+async fn get_background_sync_state() -> Result<String, String> {
+    use crate::background_sync::get_sync_manager;
+    
+    let manager = get_sync_manager();
+    let state = manager.get_state().await;
+    
+    Ok(format!("{:?}", state))
+}
+
+/// Stub commands for desktop (no-op since background sync is mobile-only)
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+async fn start_background_sync(
+    _app_handle: tauri::AppHandle,
+    _homeserver_url: String,
+    _user_id: String,
+    _access_token: String,
+    _device_id: String,
+) -> Result<(), String> {
+    Ok(()) // Desktop doesn't need background sync
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+async fn stop_background_sync() -> Result<(), String> {
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+async fn get_background_sync_state() -> Result<String, String> {
+    Ok("NotApplicable".to_string())
 }
 
 /// Runs the Tauri application
@@ -199,7 +294,13 @@ pub fn run() {
                     api.prevent_close();
                 }
             })
-            .invoke_handler(tauri::generate_handler![read_clipboard_image, open_external_url])
+            .invoke_handler(tauri::generate_handler![
+                read_clipboard_image, 
+                open_external_url,
+                start_background_sync,
+                stop_background_sync,
+                get_background_sync_state
+            ])
             .run(tauri::generate_context!())
             .expect("error while building tauri application");
     }
@@ -237,7 +338,13 @@ pub fn run() {
                     .build()?;
                 Ok(())
             })
-            .invoke_handler(tauri::generate_handler![read_clipboard_image])
+            .invoke_handler(tauri::generate_handler![
+                read_clipboard_image, 
+                open_external_url,
+                start_background_sync,
+                stop_background_sync,
+                get_background_sync_state
+            ])
             .run(tauri::generate_context!())
             .expect("error while building tauri application");
     }
