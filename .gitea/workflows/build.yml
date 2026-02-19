@@ -389,13 +389,51 @@ jobs:
           cp update.json release-files/
           ls -la release-files/
       
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v${{ steps.version.outputs.VERSION }}
-          files: release-files/*
-          draft: false
-          prerelease: false
-          generate_release_notes: true
+      - name: Create or Update Release
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TAG_NAME="v${VERSION}"
+          API_BASE="http://synbox.ruv.wtf:8418/api/v1"
+          REPO="litruv/cinny-desktop"
+          
+          # Check if release exists
+          RELEASE_ID=$(curl -s -H "Authorization: token ${GITEA_TOKEN}" \
+            "${API_BASE}/repos/${REPO}/releases/tags/${TAG_NAME}" | jq -r '.id // empty')
+          
+          if [ -z "$RELEASE_ID" ]; then
+            echo "Creating new release for ${TAG_NAME}..."
+            RELEASE_ID=$(curl -s -X POST \
+              -H "Authorization: token ${GITEA_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"tag_name\": \"${TAG_NAME}\", \"name\": \"Release ${TAG_NAME}\", \"body\": \"Release ${VERSION}\", \"draft\": false, \"prerelease\": false}" \
+              "${API_BASE}/repos/${REPO}/releases" | jq -r '.id')
+            echo "Created release with ID: ${RELEASE_ID}"
+          else
+            echo "Release exists with ID: ${RELEASE_ID}"
+            # Delete existing assets
+            echo "Deleting existing assets..."
+            ASSETS=$(curl -s -H "Authorization: token ${GITEA_TOKEN}" \
+              "${API_BASE}/repos/${REPO}/releases/${RELEASE_ID}/assets" | jq -r '.[].id')
+            for ASSET_ID in $ASSETS; do
+              echo "Deleting asset ${ASSET_ID}..."
+              curl -s -X DELETE -H "Authorization: token ${GITEA_TOKEN}" \
+                "${API_BASE}/repos/${REPO}/releases/${RELEASE_ID}/assets/${ASSET_ID}"
+            done
+          fi
+          
+          # Upload new assets
+          echo "Uploading assets..."
+          for FILE in release-files/*; do
+            FILENAME=$(basename "$FILE")
+            echo "Uploading ${FILENAME}..."
+            curl -s -X POST \
+              -H "Authorization: token ${GITEA_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@${FILE}" \
+              "${API_BASE}/repos/${REPO}/releases/${RELEASE_ID}/assets?name=${FILENAME}"
+            echo ""
+          done
+          
+          echo "Release complete!"
