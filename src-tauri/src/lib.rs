@@ -184,6 +184,7 @@ pub fn run() {
             ))
             .plugin(tauri_plugin_dialog::init())
             .plugin(tauri_plugin_process::init())
+            .plugin(tauri_plugin_http::init())
             .setup(move |app| {
                 // In dev mode, use Vite dev server; in production, use localhost plugin
                 let url: tauri::Url = if cfg!(dev) {

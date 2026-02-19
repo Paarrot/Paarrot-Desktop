@@ -14,7 +14,8 @@
   "author": "Ajay Bura",
   "license": "AGPL-3.0-only",
   "dependencies": {
-    "@tauri-apps/api": "^2.0.0"
+    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/plugin-http": "2.5.7"
   },
   "devDependencies": {
     "@actions/github": "6.0.0",

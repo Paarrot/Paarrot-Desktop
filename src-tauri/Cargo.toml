@@ -25,6 +25,7 @@ tauri = { version = "2", features = ["devtools", "tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
 log = "0.4"
+tauri-plugin-http = "2"
 
 [target."cfg(target_os = \"linux\")".dependencies]
 arboard = { version = "3", features = ["wayland-data-control"] }
