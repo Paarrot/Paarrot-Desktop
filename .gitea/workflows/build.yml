@@ -168,8 +168,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
           ref: ${{ github.ref_name }}
+          clean: false
+      
+      - name: Checkout submodules (Windows workaround)
+        shell: powershell
+        run: |
+          git submodule update --init --recursive
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
