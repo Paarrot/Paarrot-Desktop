@@ -182,6 +182,8 @@ pub fn run() {
                 tauri_plugin_autostart::MacosLauncher::LaunchAgent,
                 Some(vec!["--minimized"]),
             ))
+            .plugin(tauri_plugin_dialog::init())
+            .plugin(tauri_plugin_process::init())
             .setup(move |app| {
                 // In dev mode, use Vite dev server; in production, use localhost plugin
                 let url: tauri::Url = if cfg!(dev) {
