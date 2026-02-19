@@ -6,10 +6,12 @@
   "platforms": ["linux", "windows", "macOS"],
   "permissions": [
     "core:default",
+    "core:webview:allow-internal-toggle-devtools",
     "opener:default",
     "opener:allow-open-url",
     "opener:allow-default-urls",
     "notification:default",
+    "notification:allow-register-listener",
     "autostart:default",
     "updater:default",
     "dialog:default",
