@@ -137,6 +137,12 @@ jobs:
             Copy-Item $msiZipSig.FullName "$outDir/Cinny-Windows-x64.msi.zip.sig" -Force 
           }
           
+          $msiSig = Get-ChildItem "$srcDir/*.msi.sig" -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if ($msiSig) { 
+            Write-Host "Found MSI.sig: $($msiSig.FullName)"
+            Copy-Item $msiSig.FullName "$outDir/Cinny-Windows-x64.msi.sig" -Force 
+          }
+          
           Write-Host "Final output:"
           Get-ChildItem $outDir
       
@@ -153,12 +159,19 @@ jobs:
           name: Cinny-Windows-x64.msi.zip
           path: src-tauri/target/release/bundle/msi/Cinny-Windows-x64.msi.zip
       
-      - name: Upload MSI updater signature
+      - name: Upload MSI updater signature (zip)
         uses: actions/upload-artifact@v3
         if: always()
         with:
           name: Cinny-Windows-x64.msi.zip.sig
           path: src-tauri/target/release/bundle/msi/Cinny-Windows-x64.msi.zip.sig
+      
+      - name: Upload MSI signature
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: Cinny-Windows-x64.msi.sig
+          path: src-tauri/target/release/bundle/msi/Cinny-Windows-x64.msi.sig
 
   build-linux:
     runs-on: ubuntu-latest
@@ -478,8 +491,8 @@ jobs:
           if [ -f "artifacts/Cinny-Linux-x64.AppImage.sig/Cinny-Linux-x64.AppImage.sig" ]; then
             APPIMAGE_SIG=$(cat "artifacts/Cinny-Linux-x64.AppImage.sig/Cinny-Linux-x64.AppImage.sig")
           fi
-          if [ -f "artifacts/Cinny-Windows-x64.msi.zip.sig/Cinny-Windows-x64.msi.zip.sig" ]; then
-            MSI_SIG=$(cat "artifacts/Cinny-Windows-x64.msi.zip.sig/Cinny-Windows-x64.msi.zip.sig")
+          if [ -f "artifacts/Cinny-Windows-x64.msi.sig/Cinny-Windows-x64.msi.sig" ]; then
+            MSI_SIG=$(cat "artifacts/Cinny-Windows-x64.msi.sig/Cinny-Windows-x64.msi.sig")
           fi
           
           cat > update.json << EOF
