@@ -494,7 +494,7 @@ jobs:
               },
               "windows-x86_64": {
                 "signature": "${MSI_SIG}",
-                "url": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/download/v${VERSION}/Cinny-Windows-x64.msi.zip"
+                "url": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/download/v${VERSION}/Cinny-Windows-x64.msi"
               }
             }
           }
