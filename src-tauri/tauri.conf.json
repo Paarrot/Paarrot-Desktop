@@ -25,7 +25,7 @@
       }
     ],
     "security": {
-      "csp": "script-src blob: data: filesystem: ws: wss: http: https: tauri: 'unsafe-eval' 'unsafe-inline' 'self'; img-src 'self' https: http: data: blob:"
+      "csp": "script-src blob: data: filesystem: ws: wss: http: https: tauri: 'unsafe-eval' 'unsafe-inline' 'self'; img-src 'self' https: http: data: blob:; frame-src https: http:"
     }
   },
   "plugins": {

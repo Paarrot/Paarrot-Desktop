@@ -76,6 +76,72 @@ fn open_external_url(url: String) -> Result<(), String> {
     tauri_plugin_opener::open_url(&url, None::<&str>).map_err(|e| e.to_string())
 }
 
+/// YouTube stream info returned by yt-dlp
+#[derive(serde::Serialize)]
+struct YouTubeStreamInfo {
+    /// Direct video stream URL (may include video+audio or video only)
+    video_url: String,
+    /// Title of the video
+    title: String,
+}
+
+/// Extract direct YouTube stream URL using yt-dlp
+/// Requires yt-dlp to be installed and available in PATH
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+async fn get_youtube_stream(url: String) -> Result<YouTubeStreamInfo, String> {
+    use std::process::Command;
+    
+    // First get the title
+    let title_output = Command::new("yt-dlp")
+        .args(["--get-title", &url])
+        .output()
+        .map_err(|e| format!("Failed to run yt-dlp (is it installed?): {}", e))?;
+    
+    let title = if title_output.status.success() {
+        String::from_utf8_lossy(&title_output.stdout).trim().to_string()
+    } else {
+        "YouTube Video".to_string()
+    };
+    
+    // Get the best format with video+audio combined (up to 1080p)
+    // -f "best[height<=1080]" gets combined format
+    // Fallback to "bestvideo[height<=1080]+bestaudio/best" for separate streams
+    let output = Command::new("yt-dlp")
+        .args([
+            "-g",  // Get URL only
+            "-f", "best[height<=1080]/bestvideo[height<=1080]+bestaudio/best",
+            &url
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("yt-dlp error: {}", stderr));
+    }
+    
+    let video_url = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    
+    if video_url.is_empty() {
+        return Err("yt-dlp returned empty URL".to_string());
+    }
+    
+    Ok(YouTubeStreamInfo { video_url, title })
+}
+
+/// Stub for mobile platforms - YouTube streaming not supported
+#[cfg(any(target_os = "android", target_os = "ios"))]
+#[tauri::command]
+async fn get_youtube_stream(_url: String) -> Result<YouTubeStreamInfo, String> {
+    Err("YouTube streaming not supported on mobile".to_string())
+}
+
 /// Start background Matrix sync with the given credentials (mobile only)
 #[cfg(any(target_os = "android", target_os = "ios"))]
 #[tauri::command]
@@ -300,6 +366,7 @@ pub fn run() {
             .invoke_handler(tauri::generate_handler![
                 read_clipboard_image, 
                 open_external_url,
+                get_youtube_stream,
                 start_background_sync,
                 stop_background_sync,
                 get_background_sync_state
@@ -344,6 +411,7 @@ pub fn run() {
             .invoke_handler(tauri::generate_handler![
                 read_clipboard_image, 
                 open_external_url,
+                get_youtube_stream,
                 start_background_sync,
                 stop_background_sync,
                 get_background_sync_state
