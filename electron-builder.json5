@@ -48,12 +48,14 @@
     "category": "Network;InstantMessaging",
     "icon": "icons/icon.png",
     "desktop": {
-      "Name": "Paarrot",
-      "GenericName": "Matrix Client",
-      "Comment": "A Matrix client built with Cinny",
-      "Categories": "Network;InstantMessaging;",
-      "Keywords": "matrix;chat;messaging;",
-      "StartupWMClass": "paarrot"
+      "entry": {
+        "Name": "Paarrot",
+        "GenericName": "Matrix Client",
+        "Comment": "A Matrix client built with Cinny",
+        "Categories": "Network;InstantMessaging;",
+        "Keywords": "matrix;chat;messaging;",
+        "StartupWMClass": "paarrot"
+      }
     }
   },
   "appImage": {
