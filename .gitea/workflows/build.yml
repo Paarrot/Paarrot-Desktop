@@ -144,41 +144,17 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
-      - name: Upload AppImage (x64)
-        uses: actions/upload-artifact@v3
-        with:
-          name: Paarrot-Linux-x64.AppImage
-          path: dist-electron/Paarrot-*-x86_64.AppImage
-      
-      - name: Upload AppImage (arm64)
-        uses: actions/upload-artifact@v3
-        with:
-          name: Paarrot-Linux-arm64.AppImage
-          path: dist-electron/Paarrot-*-arm64.AppImage
-      
-      - name: Upload DEB package (x64)
+      - name: Upload DEB package
         uses: actions/upload-artifact@v3
         with:
           name: Paarrot-Linux-x64.deb
           path: dist-electron/Paarrot-*-linux-amd64.deb
       
-      - name: Upload DEB package (arm64)
-        uses: actions/upload-artifact@v3
-        with:
-          name: Paarrot-Linux-arm64.deb
-          path: dist-electron/Paarrot-*-linux-arm64.deb
-      
-      - name: Upload RPM package (x64)
+      - name: Upload RPM package
         uses: actions/upload-artifact@v3
         with:
           name: Paarrot-Linux-x64.rpm
           path: dist-electron/Paarrot-*-linux-x86_64.rpm
-      
-      - name: Upload RPM package (arm64)
-        uses: actions/upload-artifact@v3
-        with:
-          name: Paarrot-Linux-arm64.rpm
-          path: dist-electron/Paarrot-*-linux-aarch64.rpm
 
   create-release:
     runs-on: ubuntu-latest
