@@ -101,10 +101,7 @@
     "shortcutName": "Paarrot"
   },
   "publish": {
-    "provider": "github",
-    "owner": "litruv",
-    "repo": "cinny-desktop",
-    "host": "synbox.ruv.wtf:8418",
-    "protocol": "http"
+    "provider": "generic",
+    "url": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/latest/download"
   }
 }

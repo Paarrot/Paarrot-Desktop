@@ -571,6 +571,9 @@ ipcMain.handle('get-background-sync-state', async () => {
 
 // Auto-updater IPC handlers
 ipcMain.handle('check-for-updates', async () => {
+  if (isDev) {
+    return { success: false, error: 'Updates are not available in development mode' };
+  }
   try {
     const result = await autoUpdater.checkForUpdates();
     return { success: true, data: result };
@@ -580,6 +583,9 @@ ipcMain.handle('check-for-updates', async () => {
 });
 
 ipcMain.handle('download-update', async () => {
+  if (isDev) {
+    return { success: false, error: 'Updates are not available in development mode' };
+  }
   try {
     await autoUpdater.downloadUpdate();
     return { success: true };
@@ -589,6 +595,9 @@ ipcMain.handle('download-update', async () => {
 });
 
 ipcMain.handle('install-update', () => {
+  if (isDev) {
+    return { success: false, error: 'Updates are not available in development mode' };
+  }
   autoUpdater.quitAndInstall(false, true);
   return { success: true };
 });
