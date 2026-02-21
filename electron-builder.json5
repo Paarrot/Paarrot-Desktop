@@ -59,7 +59,6 @@
     }
   },
   "appImage": {
-    "license": "AGPL-3.0",
     "artifactName": "${productName}-${version}-${arch}.${ext}"
   },
   "deb": {
