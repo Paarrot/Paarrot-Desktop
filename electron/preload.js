@@ -136,6 +136,18 @@ contextBridge.exposeInMainWorld('electron', {
   // Desktop capturer (for screen sharing)
   desktopCapturer: {
     getSources: (opts) => ipcRenderer.invoke('get-desktop-sources', opts)
+  },
+  
+  // API action handler (for external API server)
+  api: {
+    onAction: (callback) => {
+      const handler = (_, data) => callback(data);
+      ipcRenderer.on('api-action', handler);
+      return () => ipcRenderer.removeListener('api-action', handler);
+    },
+    sendResponse: (channel, result) => {
+      ipcRenderer.invoke(channel, result);
+    }
   }
 });
 

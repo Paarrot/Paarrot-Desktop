@@ -6,6 +6,7 @@ const { promisify } = require('util');
 const Store = require('electron-store');
 const open = require('open');
 const { autoUpdater } = require('electron-updater');
+const PaarrotAPIServer = require('./api-server');
 
 const execAsync = promisify(exec);
 const store = new Store();
@@ -13,6 +14,7 @@ const store = new Store();
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
+let apiServer = null;
 
 // Configure auto-updater
 autoUpdater.autoDownload = false;
@@ -106,11 +108,34 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: true,
-      allowRunningInsecureContent: false
+      allowRunningInsecureContent: false,
+      // Enable navigation gestures (works on macOS and some Linux environments)
+      enableBlinkFeatures: 'OverscrollHistoryNavigation'
     },
     icon: getIconPath(process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     show: false // Don't show until ready
   });
+
+  // Enable trackpad swipe gestures for navigation on macOS
+  if (process.platform === 'darwin') {
+    try {
+      mainWindow.on('swipe', (event, direction) => {
+        console.log(`Paarrot: Swipe gesture detected: ${direction}`);
+        if (direction === 'left' && mainWindow.webContents.canGoForward()) {
+          console.log('Paarrot: Navigating forward');
+          mainWindow.webContents.goForward();
+        } else if (direction === 'right' && mainWindow.webContents.canGoBack()) {
+          console.log('Paarrot: Navigating back');
+          mainWindow.webContents.goBack();
+        }
+      });
+    } catch (error) {
+      console.error('Paarrot: Failed to set up swipe gestures:', error);
+    }
+  }
+  
+  // On Linux, the OverscrollHistoryNavigation Blink feature should handle it automatically
+  // On Windows, mouse buttons 4 & 5 are typically used for navigation (handled by Chromium)
 
   // Restore maximized state
   if (windowState.isMaximized) {
@@ -190,6 +215,75 @@ function createWindow() {
       callback({});
     }
   }, { useSystemPicker: false });
+
+  // Disable default context menu, only show for text selection
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    const { selectionText, isEditable } = params;
+    
+    // Only show context menu if there's selected text or in an editable field
+    if (selectionText || isEditable) {
+      // Build a minimal menu for text operations
+      const template = [];
+      
+      if (params.misspelledWord) {
+        // Add spelling suggestions
+        params.dictionarySuggestions.slice(0, 5).forEach(suggestion => {
+          template.push({
+            label: suggestion,
+            click: () => mainWindow.webContents.replaceMisspelling(suggestion)
+          });
+        });
+        if (template.length > 0) {
+          template.push({ type: 'separator' });
+        }
+      }
+      
+      if (selectionText) {
+        template.push(
+          {
+            label: 'Copy',
+            role: 'copy',
+            accelerator: 'CmdOrCtrl+C'
+          }
+        );
+      }
+      
+      if (isEditable) {
+        if (selectionText) {
+          template.push(
+            {
+              label: 'Cut',
+              role: 'cut',
+              accelerator: 'CmdOrCtrl+X'
+            }
+          );
+        }
+        template.push(
+          {
+            label: 'Paste',
+            role: 'paste',
+            accelerator: 'CmdOrCtrl+V'
+          }
+        );
+        if (selectionText) {
+          template.push({ type: 'separator' });
+          template.push(
+            {
+              label: 'Select All',
+              role: 'selectAll',
+              accelerator: 'CmdOrCtrl+A'
+            }
+          );
+        }
+      }
+      
+      if (template.length > 0) {
+        const menu = Menu.buildFromTemplate(template);
+        menu.popup(mainWindow);
+      }
+    }
+    // If no text selected and not editable, suppress the context menu entirely
+  });
 
   // Load the app
   if (isDev) {
@@ -299,6 +393,12 @@ app.whenReady().then(() => {
   createWindow();
   createTray();
   
+  // Start API server
+  apiServer = new PaarrotAPIServer(mainWindow);
+  apiServer.start().catch(err => {
+    console.error('Failed to start API server:', err);
+  });
+  
   // Check for updates (not in development mode)
   if (!isDev) {
     // Check for updates on start (after 3 seconds)
@@ -336,6 +436,11 @@ app.on('activate', () => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  
+  // Stop API server
+  if (apiServer) {
+    apiServer.stop();
+  }
 });
 
 // ==================== IPC Handlers ====================
