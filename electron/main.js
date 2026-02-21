@@ -1,0 +1,490 @@
+const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, clipboard, session, desktopCapturer } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const Store = require('electron-store');
+const open = require('open');
+const { autoUpdater } = require('electron-updater');
+
+const execAsync = promisify(exec);
+const store = new Store();
+
+let mainWindow = null;
+let tray = null;
+let isQuitting = false;
+
+// Configure auto-updater
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+// Auto-updater event handlers
+autoUpdater.on('checking-for-update', () => {
+  console.log('Checking for updates...');
+});
+
+autoUpdater.on('update-available', (info) => {
+  console.log('Update available:', info.version);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-available', info);
+  }
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  console.log('No updates available');
+});
+
+autoUpdater.on('error', (err) => {
+  console.error('Auto-updater error:', err);
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  console.log(`Download progress: ${progressObj.percent}%`);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-download-progress', progressObj);
+  }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  console.log('Update downloaded:', info.version);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-downloaded', info);
+  }
+});
+
+
+// Single instance lock
+const gotTheLock = app.requestSingleInstanceLock();
+
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // Someone tried to run a second instance, focus our window
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
+// Development mode detection
+const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+const VITE_DEV_SERVER = 'http://localhost:8080';
+const PORT = 44548;
+
+function createWindow() {
+  // Restore window state or use defaults
+  const windowState = store.get('windowState', {
+    width: 1280,
+    height: 905,
+    x: undefined,
+    y: undefined,
+    isMaximized: false
+  });
+
+  mainWindow = new BrowserWindow({
+    width: windowState.width,
+    height: windowState.height,
+    x: windowState.x,
+    y: windowState.y,
+    title: 'Paarrot',
+    frame: false, // Custom window decorations
+    resizable: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: true,
+      allowRunningInsecureContent: false
+    },
+    icon: path.join(__dirname, '../icons', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    show: false // Don't show until ready
+  });
+
+  // Restore maximized state
+  if (windowState.isMaximized) {
+    mainWindow.maximize();
+  }
+
+  // Save window state on resize/move
+  const saveWindowState = () => {
+    if (!mainWindow.isMaximized() && !mainWindow.isMinimized() && !mainWindow.isFullScreen()) {
+      const bounds = mainWindow.getBounds();
+      store.set('windowState', {
+        width: bounds.width,
+        height: bounds.height,
+        x: bounds.x,
+        y: bounds.y,
+        isMaximized: false
+      });
+    }
+  };
+
+  mainWindow.on('resize', saveWindowState);
+  mainWindow.on('move', saveWindowState);
+  mainWindow.on('maximize', () => {
+    store.set('windowState.isMaximized', true);
+  });
+  mainWindow.on('unmaximize', () => {
+    store.set('windowState.isMaximized', false);
+  });
+
+  // Set up session handlers BEFORE loading the app
+  // Auto-approve media permissions including screen capture
+  mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+    const allowedPermissions = ['media', 'microphone', 'camera', 'display-capture'];
+    
+    if (allowedPermissions.includes(permission)) {
+      console.log(`Paarrot: Auto-approving permission: ${permission}`);
+      callback(true);
+    } else {
+      console.log(`Paarrot: Denying permission: ${permission}`);
+      callback(false);
+    }
+  });
+
+  // Handle screen capture requests - always allow
+  mainWindow.webContents.session.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+    console.log(`Paarrot: Permission check - ${permission} from ${requestingOrigin}`);
+    return true; // Allow all permissions
+  });
+
+  // Handle display media request (screen sharing) - this is the key for Electron screen capture
+  mainWindow.webContents.session.setDisplayMediaRequestHandler(async (request, callback) => {
+    console.log('Paarrot: Display media request received', request);
+    
+    try {
+      const sources = await desktopCapturer.getSources({
+        types: ['screen', 'window'],
+        thumbnailSize: { width: 150, height: 150 }
+      });
+      
+      console.log('Paarrot: Available sources:', sources.length);
+      sources.forEach((s, i) => console.log(`  ${i}: ${s.name} (${s.id})`));
+      
+      if (sources.length === 0) {
+        console.log('Paarrot: No sources available, denying request');
+        callback({});
+        return;
+      }
+      
+      // Prefer screens over windows
+      const source = sources.find(s => s.id.startsWith('screen:')) || sources[0];
+      console.log('Paarrot: Selected source:', source.name, source.id);
+      
+      // Return the selected source - video is required
+      callback({ video: source });
+    } catch (error) {
+      console.error('Paarrot: Error getting display sources:', error);
+      callback({});
+    }
+  }, { useSystemPicker: false });
+
+  // Load the app
+  if (isDev) {
+    mainWindow.loadURL(VITE_DEV_SERVER);
+    // Open DevTools in development
+    mainWindow.webContents.openDevTools();
+  } else {
+    // In production, serve from built files
+    mainWindow.loadFile(path.join(__dirname, '../cinny/dist/index.html'));
+  }
+
+  // Show window when ready
+  mainWindow.once('ready-to-show', () => {
+    // Check for --minimized flag (autostart)
+    if (!process.argv.includes('--minimized')) {
+      mainWindow.show();
+    }
+  });
+
+  // Handle window close - minimize to tray
+  mainWindow.on('close', (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      mainWindow.hide();
+      return false;
+    }
+  });
+
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
+
+  // Open external links in default browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url);
+      return { action: 'deny' };
+    }
+    return { action: 'allow' };
+  });
+
+  // Navigation handler - open external links in browser
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const allowedOrigins = [
+      'http://localhost:8080',
+      'http://localhost:44548',
+      'http://127.0.0.1:8080',
+      'http://127.0.0.1:44548'
+    ];
+    
+    const isAllowed = allowedOrigins.some(origin => url.startsWith(origin)) ||
+                      url.startsWith('blob:') ||
+                      url.startsWith('data:');
+    
+    if (!isAllowed && (url.startsWith('http://') || url.startsWith('https://'))) {
+      event.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
+  return mainWindow;
+}
+
+function createTray() {
+  const iconPath = path.join(__dirname, '../icons', 'icon.png');
+  const trayIcon = nativeImage.createFromPath(iconPath);
+  tray = new Tray(trayIcon.resize({ width: 16, height: 16 }));
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Show Paarrot',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      }
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      }
+    }
+  ]);
+
+  tray.setContextMenu(contextMenu);
+  tray.setToolTip('Paarrot');
+
+  // Click tray icon to show window
+  tray.on('click', () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
+}
+
+// App lifecycle
+app.whenReady().then(() => {
+  createWindow();
+  createTray();
+  
+  // Check for updates (not in development mode)
+  if (!isDev) {
+    // Check for updates on start (after 3 seconds)
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(err => {
+        console.error('Failed to check for updates:', err);
+      });
+    }, 3000);
+    
+    // Check for updates every 6 hours
+    setInterval(() => {
+      autoUpdater.checkForUpdates().catch(err => {
+        console.error('Failed to check for updates:', err);
+      });
+    }, 6 * 60 * 60 * 1000);
+  }
+});
+
+app.on('window-all-closed', () => {
+  // On macOS, apps stay active until Cmd+Q
+  if (process.platform !== 'darwin') {
+    // But we want to stay in tray, so don't quit
+    // app.quit();
+  }
+});
+
+app.on('activate', () => {
+  // On macOS, recreate window when dock icon is clicked
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  } else if (mainWindow) {
+    mainWindow.show();
+  }
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
+});
+
+// ==================== IPC Handlers ====================
+
+// Window controls
+ipcMain.handle('window:minimize', () => {
+  if (mainWindow) mainWindow.minimize();
+});
+
+ipcMain.handle('window:maximize', () => {
+  if (mainWindow) {
+    if (mainWindow.isMaximized()) {
+      mainWindow.unmaximize();
+    } else {
+      mainWindow.maximize();
+    }
+  }
+});
+
+ipcMain.handle('window:unmaximize', () => {
+  if (mainWindow) mainWindow.unmaximize();
+});
+
+ipcMain.handle('window:close', () => {
+  if (mainWindow) mainWindow.close();
+});
+
+ipcMain.handle('window:is-maximized', () => {
+  return mainWindow ? mainWindow.isMaximized() : false;
+});
+
+ipcMain.handle('window:start-drag', () => {
+  if (mainWindow) mainWindow.webContents.startDrag({ file: '', icon: nativeImage.createEmpty() });
+});
+
+// Open external URL
+ipcMain.handle('open-external-url', async (event, url) => {
+  try {
+    await shell.openExternal(url);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Read clipboard image
+ipcMain.handle('read-clipboard-image', async () => {
+  try {
+    const image = clipboard.readImage();
+    if (image.isEmpty()) {
+      return { success: true, data: null };
+    }
+    
+    // Convert to PNG base64
+    const pngBuffer = image.toPNG();
+    const base64 = pngBuffer.toString('base64');
+    return { 
+      success: true, 
+      data: `data:image/png;base64,${base64}` 
+    };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Get YouTube stream using yt-dlp
+ipcMain.handle('get-youtube-stream', async (event, url) => {
+  try {
+    // Check if yt-dlp is available
+    try {
+      await execAsync('yt-dlp --version');
+    } catch {
+      return { 
+        success: false, 
+        error: 'yt-dlp is not installed. Please install yt-dlp to use YouTube features.' 
+      };
+    }
+
+    // Get title
+    let title = 'YouTube Video';
+    try {
+      const titleResult = await execAsync(`yt-dlp --get-title "${url}"`);
+      title = titleResult.stdout.trim();
+    } catch (e) {
+      console.warn('Failed to get video title:', e.message);
+    }
+
+    // Get video URL
+    const result = await execAsync(
+      `yt-dlp -g -f "best[height<=1080]/bestvideo[height<=1080]+bestaudio/best" "${url}"`
+    );
+    
+    const videoUrl = result.stdout.trim().split('\n')[0];
+    
+    if (!videoUrl) {
+      return { success: false, error: 'yt-dlp returned empty URL' };
+    }
+
+    return { 
+      success: true, 
+      data: { video_url: videoUrl, title } 
+    };
+  } catch (error) {
+    return { 
+      success: false, 
+      error: `yt-dlp error: ${error.message}` 
+    };
+  }
+});
+
+// Background sync stubs (desktop doesn't need it)
+ipcMain.handle('start-background-sync', async () => {
+  return { success: true };
+});
+
+ipcMain.handle('stop-background-sync', async () => {
+  return { success: true };
+});
+
+ipcMain.handle('get-background-sync-state', async () => {
+  return { success: true, data: 'NotApplicable' };
+});
+
+// Auto-updater IPC handlers
+ipcMain.handle('check-for-updates', async () => {
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { success: true, data: result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('download-update', async () => {
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('install-update', () => {
+  autoUpdater.quitAndInstall(false, true);
+  return { success: true };
+});
+
+// Screen capture / desktopCapturer handler
+ipcMain.handle('get-desktop-sources', async (event, opts) => {
+  try {
+    const sources = await desktopCapturer.getSources(opts);
+    return { success: true, data: sources };
+  } catch (error) {
+    console.error('Failed to get desktop sources:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+console.log('Paarrot Electron main process started');
+console.log('Development mode:', isDev);
+console.log('Platform:', process.platform);
