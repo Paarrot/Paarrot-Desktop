@@ -1,6 +1,6 @@
 {
   "name": "paarrot",
-  "version": "4.11.19",
+  "version": "4.11.20",
   "description": "Yet another matrix client",
   "homepage": "https://github.com/ajbura/cinny",
   "main": "electron/main.js",
