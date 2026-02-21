@@ -179,16 +179,29 @@ Get a list of available rooms/channels.
     {
       "roomId": "!abc123:matrix.org",
       "name": "General",
-      "isDirect": false
+      "server": "matrix.org",
+      "isDirect": false,
+      "avatar": null
     },
     {
       "roomId": "!def456:matrix.org",
       "name": "Random",
-      "isDirect": false
+      "server": "matrix.org",
+      "isDirect": false,
+      "avatar": null
+    },
+    {
+      "roomId": "!xyz789:example.com",
+      "name": "General",
+      "server": "example.com",
+      "isDirect": false,
+      "avatar": null
     }
   ]
 }
 ```
+
+**Note**: The `server` field helps distinguish between rooms with the same name on different servers.
 
 ---
 
@@ -258,6 +271,7 @@ Get information about the currently active room.
   "data": {
     "roomId": "!abc123:matrix.org",
     "name": "General",
+    "server": "matrix.org",
     "avatar": "mxc://matrix.org/abc123",
     "isDirect": false
   }
