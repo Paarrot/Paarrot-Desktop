@@ -8,7 +8,7 @@ Cinny is a matrix client focusing primarily on simple, elegant and secure interf
 ## Download
 
 Installers for macOS, Windows and Linux can be downloaded from [releases](https://github.com/cinnyapp/cinny-desktop/releases).
-
+ 
 Operating System | Download
 ---|---
 Windows | <a href='https://github.com/cinnyapp/cinny-desktop/releases/latest'>Get it on Windows</a>
