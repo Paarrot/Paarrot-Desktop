@@ -4,7 +4,7 @@
   <img alt="GitHub release downloads" src="https://img.shields.io/github/downloads/cinnyapp/cinny-desktop/total?style=social"></a>
 
 Cinny is a matrix client focusing primarily on simple, elegant and secure interface. The desktop app is built with Electron.
-
+ 
 ## Download
 
 Installers for macOS, Windows and Linux can be downloaded from [releases](https://github.com/cinnyapp/cinny-desktop/releases).
