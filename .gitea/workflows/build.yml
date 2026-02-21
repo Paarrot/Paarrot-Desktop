@@ -89,6 +89,12 @@ jobs:
         working-directory: ./cinny
         run: npm install --prefer-offline
       
+      - name: Clean previous builds
+        shell: powershell
+        run: |
+          if (Test-Path cinny/dist) { Remove-Item -Recurse -Force cinny/dist }
+          if (Test-Path dist-electron) { Remove-Item -Recurse -Force dist-electron }
+      
       - name: Build Electron app
         run: npm run build:win
         env:
@@ -138,6 +144,10 @@ jobs:
       - name: Install dependencies (cinny)
         working-directory: ./cinny
         run: npm ci --prefer-offline
+      
+      - name: Clean previous builds
+        run: |
+          rm -rf cinny/dist dist-electron
       
       - name: Build Electron app
         run: npm run build:linux
