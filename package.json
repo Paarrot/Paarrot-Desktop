@@ -2,6 +2,7 @@
   "name": "paarrot",
   "version": "4.10.2",
   "description": "Yet another matrix client",
+  "homepage": "https://github.com/ajbura/cinny",
   "main": "electron/main.js",
   "engines": {
     "node": ">=18.0.0"
@@ -15,7 +16,10 @@
     "build:win": "npm run build -- --win"
   },
   "keywords": [],
-  "author": "Ajay Bura",
+  "author": {
+    "name": "Ajay Bura",
+    "email": "AjayBura@users.noreply.github.com"
+  },
   "license": "AGPL-3.0-only",
   "dependencies": {
     "electron-store": "^8.2.0",

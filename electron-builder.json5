@@ -46,6 +46,7 @@
       }
     ],
     "category": "Network;InstantMessaging",
+    "maintainer": "Paarrot <paarrot@users.noreply.github.com>",
     "icon": "icons/icon.png",
     "desktop": {
       "entry": {
