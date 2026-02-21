@@ -11,7 +11,7 @@
   "allowCustomHomeservers": true,
 
   "calling": {
-    "livekitServiceUrl": ""
+    "livekitServiceUrl": "https://b.ruv.wtf/matrix-rtc/livekit/jwt"
   },
 
   "featuredCommunities": {

@@ -567,6 +567,16 @@ ipcMain.handle('read-clipboard-image', async () => {
   }
 });
 
+// Write text to clipboard
+ipcMain.handle('write-clipboard-text', async (event, text) => {
+  try {
+    clipboard.writeText(text);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // Get YouTube stream using yt-dlp
 ipcMain.handle('get-youtube-stream', async (event, url) => {
   try {

@@ -9,6 +9,7 @@ const commandMap = {
   'window_is_maximized': 'window:is-maximized',
   'window_start_drag': 'window:start-drag',
   'read_clipboard_image': 'read-clipboard-image',
+  'write_clipboard_text': 'write-clipboard-text',
   'open_external_url': 'open-external-url',
   'get_youtube_stream': 'get-youtube-stream',
   'start_background_sync': 'start-background-sync',
@@ -97,7 +98,8 @@ contextBridge.exposeInMainWorld('electron', {
   
   // Clipboard
   clipboard: {
-    readImage: () => ipcRenderer.invoke('read-clipboard-image')
+    readImage: () => ipcRenderer.invoke('read-clipboard-image'),
+    writeText: (text) => ipcRenderer.invoke('write-clipboard-text', text)
   },
   
   // External URLs
