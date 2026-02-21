@@ -99,5 +99,9 @@
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
     "shortcutName": "Paarrot"
+  },
+  "publish": {
+    "provider": "generic",
+    "url": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/download/${version}"
   }
 }
