@@ -64,8 +64,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
           ref: ${{ github.ref_name }}
+      
+      - name: Checkout submodules manually
+        shell: powershell
+        run: |
+          git submodule update --init --recursive
       
       - name: Pull latest (after version bump)
         if: github.ref == 'refs/heads/main'
