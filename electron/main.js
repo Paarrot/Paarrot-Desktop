@@ -74,6 +74,15 @@ const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const VITE_DEV_SERVER = 'http://localhost:8080';
 const PORT = 44548;
 
+// Helper to get correct icon path in dev vs packaged app
+function getIconPath(iconName) {
+  if (isDev) {
+    return path.join(__dirname, '../icons', iconName);
+  }
+  // In packaged app, extraResources puts icons in resources/icons/
+  return path.join(process.resourcesPath, 'icons', iconName);
+}
+
 function createWindow() {
   // Restore window state or use defaults
   const windowState = store.get('windowState', {
@@ -99,7 +108,7 @@ function createWindow() {
       webSecurity: true,
       allowRunningInsecureContent: false
     },
-    icon: path.join(__dirname, '../icons', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    icon: getIconPath(process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     show: false // Don't show until ready
   });
 
@@ -245,7 +254,7 @@ function createWindow() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, '../icons', 'icon.png');
+  const iconPath = getIconPath('icon.png');
   const trayIcon = nativeImage.createFromPath(iconPath);
   tray = new Tray(trayIcon.resize({ width: 16, height: 16 }));
 
