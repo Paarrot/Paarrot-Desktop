@@ -225,6 +225,43 @@ async fn get_background_sync_state() -> Result<String, String> {
     Ok("NotApplicable".to_string())
 }
 
+/// Window control commands for custom decorations
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+async fn window_minimize(window: tauri::Window) -> Result<(), String> {
+    window.minimize().map_err(|e| e.to_string())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+async fn window_maximize(window: tauri::Window) -> Result<(), String> {
+    window.maximize().map_err(|e| e.to_string())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+async fn window_unmaximize(window: tauri::Window) -> Result<(), String> {
+    window.unmaximize().map_err(|e| e.to_string())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+async fn window_close(window: tauri::Window) -> Result<(), String> {
+    window.close().map_err(|e| e.to_string())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+async fn window_is_maximized(window: tauri::Window) -> Result<bool, String> {
+    window.is_maximized().map_err(|e| e.to_string())
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[tauri::command]
+async fn window_start_drag(window: tauri::Window) -> Result<(), String> {
+    window.start_dragging().map_err(|e| e.to_string())
+}
+
 /// Runs the Tauri application
 pub fn run() {
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
@@ -260,11 +297,12 @@ pub fn run() {
                 };
                 
                 // Create the main window manually with navigation handler for external links
-                WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+                let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
                     .title("Paarrot")
                     .inner_size(1280.0, 905.0)
                     .center()
                     .resizable(true)
+                    .decorations(false)
                     .disable_drag_drop_handler()
                     .on_navigation(|url| {
                         let url_str = url.as_str();
@@ -285,6 +323,9 @@ pub fn run() {
                         true
                     })
                     .build()?;
+                
+                // Explicitly ensure decorations are disabled (important for Linux)
+                window.set_decorations(false)?;
                 
                 // Linux: Set up permission handler to auto-allow microphone/camera access
                 #[cfg(target_os = "linux")]
@@ -354,6 +395,12 @@ pub fn run() {
                     })
                     .build(app)?;
 
+                // Force decorations off one final time after all plugins have initialized
+                // This ensures window-state plugin doesn't override our settings
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.set_decorations(false);
+                }
+
                 Ok(())
             })
             .on_window_event(|window, event| {
@@ -369,7 +416,13 @@ pub fn run() {
                 get_youtube_stream,
                 start_background_sync,
                 stop_background_sync,
-                get_background_sync_state
+                get_background_sync_state,
+                window_minimize,
+                window_maximize,
+                window_unmaximize,
+                window_close,
+                window_is_maximized,
+                window_start_drag
             ])
             .run(tauri::generate_context!())
             .expect("error while building tauri application");
