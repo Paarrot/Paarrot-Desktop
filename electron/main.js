@@ -7,6 +7,8 @@ const Store = require('electron-store');
 const open = require('open');
 const { autoUpdater } = require('electron-updater');
 const PaarrotAPIServer = require('./api-server');
+const https = require('https');
+const http = require('http');
 
 const execAsync = promisify(exec);
 const store = new Store();
@@ -19,6 +21,54 @@ let apiServer = null;
 // Configure auto-updater
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
+
+// Gitea update configuration
+const GITEA_API_BASE = 'http://synbox.ruv.wtf:8418/api/v1';
+const GITEA_REPO = 'litruv/cinny-desktop';
+
+// Function to fetch latest release from Gitea and configure update feed
+async function configureGiteaUpdateFeed() {
+  try {
+    const url = `${GITEA_API_BASE}/repos/${GITEA_REPO}/releases?limit=1`;
+    console.log('Fetching latest release from:', url);
+    
+    return new Promise((resolve, reject) => {
+      http.get(url, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          try {
+            const releases = JSON.parse(data);
+            if (releases && releases.length > 0) {
+              const latestRelease = releases[0];
+              const version = latestRelease.tag_name.replace(/^v/, '');
+              const downloadUrl = `http://synbox.ruv.wtf:8418/${GITEA_REPO}/releases/download/${latestRelease.tag_name}`;
+              
+              console.log('Latest release version:', version);
+              console.log('Download URL:', downloadUrl);
+              
+              // Configure auto-updater with the versioned release URL
+              autoUpdater.setFeedURL({
+                provider: 'generic',
+                url: downloadUrl,
+                channel: 'latest'
+              });
+              
+              resolve({ version, url: downloadUrl });
+            } else {
+              reject(new Error('No releases found'));
+            }
+          } catch (err) {
+            reject(err);
+          }
+        });
+      }).on('error', reject);
+    });
+  } catch (error) {
+    console.error('Failed to configure Gitea update feed:', error);
+    throw error;
+  }
+}
 
 // Auto-updater event handlers
 autoUpdater.on('checking-for-update', () => {
@@ -402,17 +452,23 @@ app.whenReady().then(() => {
   // Check for updates (not in development mode)
   if (!isDev) {
     // Check for updates on start (after 3 seconds)
-    setTimeout(() => {
-      autoUpdater.checkForUpdates().catch(err => {
+    setTimeout(async () => {
+      try {
+        await configureGiteaUpdateFeed();
+        await autoUpdater.checkForUpdates();
+      } catch (err) {
         console.error('Failed to check for updates:', err);
-      });
+      }
     }, 3000);
     
     // Check for updates every 6 hours
-    setInterval(() => {
-      autoUpdater.checkForUpdates().catch(err => {
+    setInterval(async () => {
+      try {
+        await configureGiteaUpdateFeed();
+        await autoUpdater.checkForUpdates();
+      } catch (err) {
         console.error('Failed to check for updates:', err);
-      });
+      }
     }, 6 * 60 * 60 * 1000);
   }
 });
@@ -575,6 +631,8 @@ ipcMain.handle('check-for-updates', async () => {
     return { success: false, error: 'Updates are not available in development mode' };
   }
   try {
+    // First, fetch latest release info from Gitea and configure feed URL
+    await configureGiteaUpdateFeed();
     const result = await autoUpdater.checkForUpdates();
     return { success: true, data: result };
   } catch (error) {
