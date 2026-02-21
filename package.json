@@ -13,7 +13,8 @@
     "dev:electron": "wait-on http://localhost:8080 && NODE_ENV=development electron .",
     "build": "node -e \"require('fs').copyFileSync('config.json', 'cinny/config.json')\" && cd cinny && npm run build && cd .. && electron-builder --publish never",
     "build:linux": "npm run build -- --linux",
-    "build:win": "npm run build -- --win"
+    "build:win": "npm run build -- --win",
+    "postman:generate": "node scripts/generate-postman-collection.js"
   },
   "keywords": [],
   "author": {

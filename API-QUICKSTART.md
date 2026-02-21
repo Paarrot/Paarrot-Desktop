@@ -8,17 +8,27 @@ The API server starts automatically when you run Paarrot. It listens on `http://
 
 ### Test the API
 
-**Option 1: Using the test script**
+**Option 1: Using Postman**
+
+Import the Postman collection for easy testing:
+1. Open Postman
+2. Click **Import** → **File**
+3. Select `paarrot-api.postman_collection.json`
+4. All endpoints will be ready to use!
+
+The collection is automatically updated on git push.
+
+**Option 2: Using the test script**
 ```bash
 node test-api.js
 ```
 
-**Option 2: Using curl**
+**Option 3: Using curl**
 ```bash
 ./test-api.sh
 ```
 
-**Option 3: Manual curl commands**
+**Option 4: Manual curl commands**
 ```bash
 # Health check
 curl http://127.0.0.1:33384/health
