@@ -33,6 +33,10 @@
   "linux": {
     "target": [
       {
+        "target": "AppImage",
+        "arch": ["x64"]
+      },
+      {
         "target": "deb",
         "arch": ["x64"]
       },
@@ -96,5 +100,11 @@
     "createStartMenuShortcut": true,
     "shortcutName": "Paarrot"
   },
-  "publish": null
+  "publish": {
+    "provider": "github",
+    "owner": "litruv",
+    "repo": "cinny-desktop",
+    "host": "synbox.ruv.wtf:8418",
+    "protocol": "http"
+  }
 }

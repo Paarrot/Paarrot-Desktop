@@ -111,6 +111,12 @@ jobs:
         with:
           name: Paarrot-Windows-x64-portable.exe
           path: dist-electron/Paarrot-*-win-x64.portable.exe
+      
+      - name: Upload Windows update metadata
+        uses: actions/upload-artifact@v3
+        with:
+          name: latest.yml
+          path: dist-electron/latest.yml
 
   build-linux:
     runs-on: ubuntu-latest
@@ -165,6 +171,12 @@ jobs:
         with:
           name: Paarrot-Linux-x64.rpm
           path: dist-electron/Paarrot-*-linux-x86_64.rpm
+      
+      - name: Upload Linux update metadata
+        uses: actions/upload-artifact@v3
+        with:
+          name: latest-linux.yml
+          path: dist-electron/latest-linux.yml
 
   create-release:
     runs-on: ubuntu-latest
@@ -222,7 +234,7 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release-files
-          find artifacts -type f \( -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" -o -name "*.zip" \) -exec cp {} release-files/ \;
+          find artifacts -type f \( -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.dmg" -o -name "*.zip" -o -name "*.yml" \) -exec cp {} release-files/ \;
           ls -la release-files/
       
       - name: Create or Update Release

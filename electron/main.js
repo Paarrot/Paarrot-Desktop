@@ -476,6 +476,11 @@ ipcMain.handle('window:start-drag', () => {
   if (mainWindow) mainWindow.webContents.startDrag({ file: '', icon: nativeImage.createEmpty() });
 });
 
+// Get app version (Tauri-compatible API)
+ipcMain.handle('plugin:app|version', () => {
+  return app.getVersion();
+});
+
 // Open external URL
 ipcMain.handle('open-external-url', async (event, url) => {
   try {
