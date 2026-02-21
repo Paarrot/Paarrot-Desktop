@@ -103,31 +103,5 @@
     "createStartMenuShortcut": true,
     "shortcutName": "Paarrot"
   },
-  "mac": {
-    "target": [
-      {
-        "target": "dmg",
-        "arch": ["x64", "arm64"]
-      },
-      {
-        "target": "zip",
-        "arch": ["x64", "arm64"]
-      }
-    ],
-    "category": "public.app-category.social-networking",
-    "icon": "icons/icon.icns",
-    "hardenedRuntime": true,
-    "gatekeeperAssess": false,
-    "entitlements": "build-resources/entitlements.mac.plist",
-    "entitlementsInherit": "build-resources/entitlements.mac.plist"
-  },
-  "dmg": {
-    "sign": false,
-    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
-  },
-  "publish": {
-    "provider": "github",
-    "owner": "litruv",
-    "repo": "cinny-desktop"
-  }
+  "publish": null
 }
