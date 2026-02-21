@@ -160,6 +160,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v3
+        with:
+          name: Paarrot-Linux-x64.AppImage
+          path: dist-electron/Paarrot-*.AppImage
+      
       - name: Upload DEB package
         uses: actions/upload-artifact@v3
         with:
