@@ -80,28 +80,24 @@
   "win": {
     "target": [
       {
-        "target": "nsis",
-        "arch": ["x64", "arm64"]
-      },
-      {
-        "target": "portable",
+        "target": "squirrel",
         "arch": ["x64", "arm64"]
       }
     ],
     "icon": "icons/icon.ico",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
   },
-  "nsis": {
-    "oneClick": false,
-    "perMachine": false,
-    "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false,
+  "squirrelWindows": {
+    "name": "Paarrot",
+    "loadingGif": "icons/icon.png",
+    "iconUrl": "https://raw.githubusercontent.com/cinnyapp/cinny-desktop/master/icons/icon.ico",
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "Paarrot"
+    "remoteReleases": false,
+    "useAppIdAsId": true
   },
   "publish": {
     "provider": "generic",
-    "url": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/download/${version}"
+    "url": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/download/v${version}"
   }
 }

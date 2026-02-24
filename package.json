@@ -25,6 +25,7 @@
   "dependencies": {
     "body-parser": "2.2.2",
     "cors": "2.8.6",
+    "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^8.2.0",
     "electron-updater": "^6.3.9",
     "express": "5.2.1",

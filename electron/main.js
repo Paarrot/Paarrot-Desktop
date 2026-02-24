@@ -10,6 +10,63 @@ const PaarrotAPIServer = require('./api-server');
 const https = require('https');
 const http = require('http');
 
+// Handle Squirrel events for Windows installer
+if (require('electron-squirrel-startup')) {
+  app.quit();
+}
+
+// Handle Squirrel.Windows installation/update events
+if (process.platform === 'win32') {
+  const handleSquirrelEvent = () => {
+    if (process.argv.length === 1) {
+      return false;
+    }
+
+    const squirrelEvent = process.argv[1];
+    
+    switch (squirrelEvent) {
+      case '--squirrel-install':
+      case '--squirrel-updated':
+        // Install desktop and start menu shortcuts
+        const cp = require('child_process');
+        const updateDotExe = path.resolve(path.dirname(process.execPath), '..', 'Update.exe');
+        const target = path.basename(process.execPath);
+        const createShortcut = `${updateDotExe} --createShortcut=${target}`;
+        
+        cp.exec(createShortcut, () => {
+          app.quit();
+        });
+        return true;
+
+      case '--squirrel-uninstall':
+        // Remove desktop and start menu shortcuts
+        const cpUninstall = require('child_process');
+        const updateDotExeUninstall = path.resolve(path.dirname(process.execPath), '..', 'Update.exe');
+        const targetUninstall = path.basename(process.execPath);
+        const removeShortcut = `${updateDotExeUninstall} --removeShortcut=${targetUninstall}`;
+        
+        cpUninstall.exec(removeShortcut, () => {
+          app.quit();
+        });
+        return true;
+
+      case '--squirrel-obsolete':
+        // This is called on the outgoing version of your app before
+        // we update to the new version - it's the opposite of
+        // --squirrel-updated
+        app.quit();
+        return true;
+    }
+
+    return false;
+  };
+
+  if (handleSquirrelEvent()) {
+    // Squirrel event handled and app will exit in 1000ms, so don't do anything else
+    return;
+  }
+}
+
 const execAsync = promisify(exec);
 const store = new Store();
 
