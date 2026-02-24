@@ -88,6 +88,7 @@
   },
   "publish": {
     "provider": "generic",
-    "url": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/download/v${version}"
+    "url": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/download/v${version}",
+    "channel": "latest"
   }
 }
