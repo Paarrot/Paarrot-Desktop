@@ -77,7 +77,6 @@
       }
     ],
     "icon": "icons/icon.ico",
-    "publisherName": "Mates.Media",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
   },
   "squirrelWindows": {
