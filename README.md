@@ -1,24 +1,24 @@
-# Cinny desktop
+# Paarrot
 
-<a href="https://github.com/cinnyapp/cinny-desktop/releases">
-  <img alt="GitHub release downloads" src="https://img.shields.io/github/downloads/cinnyapp/cinny-desktop/total?style=social"></a>
-
-Cinny is a matrix client focusing primarily on simple, elegant and secure interface. The desktop app is built with Electron.
+Paarrot is a Matrix client focusing primarily on simple, elegant and secure interface. The desktop app is built with Electron and based on Cinny.
  
 ## Download
 
-Installers for macOS, Windows and Linux can be downloaded from [releases](https://github.com/cinnyapp/cinny-desktop/releases).
+Installers for Windows and Linux can be downloaded from [releases](http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases).
  
 Operating System | Download
 ---|---
-Windows | <a href='https://github.com/cinnyapp/cinny-desktop/releases/latest'>Get it on Windows</a>
-macOS | <a href='https://github.com/cinnyapp/cinny-desktop/releases/latest'>Get it on macOS</a>
-Linux | <a href='https://github.com/cinnyapp/cinny-desktop/releases/latest'>Get it on Linux</a>
+Windows (x64) | <a href='http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases'>Get it on Windows</a>
+Linux (AppImage) | <a href='http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases'>Get it on Linux</a>
+
+### Linux Installation
+
+For the best AppImage experience, we recommend using [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) which automatically integrates AppImages into your system.
 
 ## Local development
 
 To setup development locally run the following commands:
-* `git clone --recursive https://github.com/cinnyapp/cinny-desktop.git`
+* `git clone --recursive http://synbox.ruv.wtf:8418/litruv/cinny-desktop.git`
 * `cd cinny-desktop/cinny`
 * `npm ci`
 * `cd ..`

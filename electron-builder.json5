@@ -2,7 +2,7 @@
   "appId": "com.paarrot.app",
   "productName": "Paarrot",
   "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
-  "copyright": "Copyright © 2024",
+  "copyright": "Copyright © 2026 Mates.Media",
   "directories": {
     "output": "dist-electron",
     "buildResources": "build-resources"
@@ -35,18 +35,10 @@
       {
         "target": "AppImage",
         "arch": ["x64"]
-      },
-      {
-        "target": "deb",
-        "arch": ["x64"]
-      },
-      {
-        "target": "rpm",
-        "arch": ["x64"]
       }
     ],
     "category": "Network;InstantMessaging",
-    "maintainer": "Paarrot <paarrot@users.noreply.github.com>",
+    "maintainer": "Mates.Media <mates.media@users.noreply.github.com>",
     "icon": "icons/icon.png",
     "desktop": {
       "entry": {
@@ -81,16 +73,17 @@
     "target": [
       {
         "target": "squirrel",
-        "arch": ["x64", "arm64"]
+        "arch": ["x64"]
       }
     ],
     "icon": "icons/icon.ico",
+    "publisherName": "Mates.Media",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
   },
   "squirrelWindows": {
     "name": "Paarrot",
     "loadingGif": "icons/icon.png",
-    "iconUrl": "https://raw.githubusercontent.com/cinnyapp/cinny-desktop/master/icons/icon.ico",
+    "iconUrl": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/raw/branch/main/icons/icon.ico",
     "remoteReleases": false,
     "useAppIdAsId": true
   },
