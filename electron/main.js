@@ -79,11 +79,8 @@ let apiServer = null;
 app.setName('Paarrot');
 
 // On Windows, this controls the app name shown in toast notifications.
-// In dev mode, use process.execPath so Windows can find the shortcut for electron.exe.
-// In production, use the proper app ID.
 if (process.platform === 'win32') {
-  const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged;
-  app.setAppUserModelId(isDevelopment ? process.execPath : 'com.paarrot.app');
+  app.setAppUserModelId('com.paarrot.app');
 }
 
 // Configure auto-updater
@@ -230,7 +227,7 @@ function createWindow() {
       // Enable navigation gestures (works on macOS and some Linux environments)
       enableBlinkFeatures: 'OverscrollHistoryNavigation'
     },
-    icon: getIconPath(process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    icon: nativeImage.createFromPath(getIconPath('icon.png')),
     show: false // Don't show until ready
   });
 
