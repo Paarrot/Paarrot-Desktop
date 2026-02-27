@@ -150,6 +150,11 @@ contextBridge.exposeInMainWorld('electron', {
     sendResponse: (channel, result) => {
       ipcRenderer.invoke(channel, result);
     }
+  },
+  
+  // Desktop notifications
+  notification: {
+    show: (options) => ipcRenderer.invoke('show-notification', options)
   }
 });
 

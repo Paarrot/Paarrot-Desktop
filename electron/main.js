@@ -75,6 +75,17 @@ let tray = null;
 let isQuitting = false;
 let apiServer = null;
 
+// Set app name for notifications and system tray
+app.setName('Paarrot');
+
+// On Windows, this controls the app name shown in toast notifications.
+// In dev mode, use process.execPath so Windows can find the shortcut for electron.exe.
+// In production, use the proper app ID.
+if (process.platform === 'win32') {
+  const isDevelopment = process.env.NODE_ENV === 'development' || !app.isPackaged;
+  app.setAppUserModelId(isDevelopment ? process.execPath : 'com.paarrot.app');
+}
+
 // Configure auto-updater
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
@@ -275,7 +286,7 @@ function createWindow() {
   // Set up session handlers BEFORE loading the app
   // Auto-approve media permissions including screen capture
   mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
-    const allowedPermissions = ['media', 'microphone', 'camera', 'display-capture'];
+    const allowedPermissions = ['media', 'microphone', 'camera', 'display-capture', 'notifications'];
     
     if (allowedPermissions.includes(permission)) {
       console.log(`Paarrot: Auto-approving permission: ${permission}`);
@@ -424,10 +435,26 @@ function createWindow() {
   });
 
   // Open external links in default browser
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  mainWindow.webContents.setWindowOpenHandler(({ url, features }) => {
     if (url.startsWith('http://') || url.startsWith('https://')) {
       shell.openExternal(url);
       return { action: 'deny' };
+    }
+    // Allow blank windows for screen share pop-outs with custom features
+    if (url === '' || url === 'about:blank') {
+      return { 
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          frame: false,
+          resizable: true,
+          backgroundColor: '#000000',
+          webPreferences: {
+            contextIsolation: true,
+            nodeIntegration: false,
+            backgroundThrottling: false,
+          }
+        }
+      };
     }
     return { action: 'allow' };
   });
@@ -734,6 +761,42 @@ ipcMain.handle('get-desktop-sources', async (event, opts) => {
     return { success: true, data: sources };
   } catch (error) {
     console.error('Failed to get desktop sources:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Desktop notification handler
+ipcMain.handle('show-notification', async (event, { title, body, icon }) => {
+  try {
+    console.log('Electron notification handler called:', { title, body });
+    const { Notification } = require('electron');
+    
+    if (!Notification.isSupported()) {
+      console.error('Notifications not supported on this system');
+      return { success: false, error: 'Notifications not supported on this system' };
+    }
+    
+    const notification = new Notification({
+      title: title || 'Paarrot',
+      body: body || '',
+      icon: icon || getIconPath(process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+      silent: false,
+    });
+    
+    notification.on('click', () => {
+      console.log('Notification clicked');
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    });
+    
+    notification.show();
+    console.log('Notification shown successfully');
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to show notification:', error);
     return { success: false, error: error.message };
   }
 });
