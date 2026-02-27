@@ -78,11 +78,6 @@ let apiServer = null;
 // Set app name for notifications and system tray
 app.setName('Paarrot');
 
-// On Windows, this controls the app name shown in toast notifications.
-if (process.platform === 'win32') {
-  app.setAppUserModelId('com.paarrot.app');
-}
-
 // Configure auto-updater
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
@@ -227,7 +222,7 @@ function createWindow() {
       // Enable navigation gestures (works on macOS and some Linux environments)
       enableBlinkFeatures: 'OverscrollHistoryNavigation'
     },
-    icon: nativeImage.createFromPath(getIconPath('icon.png')),
+    icon: getIconPath(process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
     show: false // Don't show until ready
   });
 
