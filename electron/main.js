@@ -608,6 +608,14 @@ ipcMain.handle('window:close', () => {
   if (mainWindow) mainWindow.close();
 });
 
+ipcMain.handle('window:focus', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
+
 ipcMain.handle('window:is-maximized', () => {
   return mainWindow ? mainWindow.isMaximized() : false;
 });
@@ -766,9 +774,8 @@ ipcMain.handle('get-desktop-sources', async (event, opts) => {
 });
 
 // Desktop notification handler
-ipcMain.handle('show-notification', async (event, { title, body, icon }) => {
+ipcMain.handle('show-notification', async (event, { title, body, icon, roomId, eventId }) => {
   try {
-    console.log('Electron notification handler called:', { title, body });
     const { Notification } = require('electron');
     
     if (!Notification.isSupported()) {
@@ -784,15 +791,24 @@ ipcMain.handle('show-notification', async (event, { title, body, icon }) => {
     });
     
     notification.on('click', () => {
-      console.log('Notification clicked');
+      console.log('Paarrot: Notification clicked, roomId:', roomId);
       if (mainWindow) {
+        console.log('Paarrot: Sending navigation to renderer');
         mainWindow.show();
         mainWindow.focus();
+        if (roomId) {
+          mainWindow.webContents.send('notification:navigate', { roomId, eventId });
+          console.log('Paarrot: Navigation event sent');
+        }
+      } else {
+        console.log('Paarrot: No mainWindow available');
       }
     });
     
+    notification.on('show', () => console.log('Paarrot: Notification shown'));
+    notification.on('failed', (e, err) => console.error('Paarrot: Notification failed:', err));
+    
     notification.show();
-    console.log('Notification shown successfully');
     
     return { success: true };
   } catch (error) {

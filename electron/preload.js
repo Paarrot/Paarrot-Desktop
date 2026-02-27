@@ -93,7 +93,8 @@ contextBridge.exposeInMainWorld('electron', {
     unmaximize: () => ipcRenderer.invoke('window:unmaximize'),
     close: () => ipcRenderer.invoke('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
-    startDrag: () => ipcRenderer.invoke('window:start-drag')
+    startDrag: () => ipcRenderer.invoke('window:start-drag'),
+    focus: () => ipcRenderer.invoke('window:focus')
   },
   
   // Clipboard
@@ -154,7 +155,12 @@ contextBridge.exposeInMainWorld('electron', {
   
   // Desktop notifications
   notification: {
-    show: (options) => ipcRenderer.invoke('show-notification', options)
+    show: (options) => ipcRenderer.invoke('show-notification', options),
+    onNavigate: (callback) => {
+      const handler = (_, data) => callback(data);
+      ipcRenderer.on('notification:navigate', handler);
+      return () => ipcRenderer.removeListener('notification:navigate', handler);
+    }
   }
 });
 
