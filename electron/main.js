@@ -326,12 +326,12 @@ function createWindow() {
     }
   }, { useSystemPicker: false });
 
-  // Disable default context menu, only show for text selection
+  // Disable default context menu, only show for text selection and images
   mainWindow.webContents.on('context-menu', (event, params) => {
-    const { selectionText, isEditable } = params;
+    const { selectionText, isEditable, mediaType, srcURL } = params;
     
-    // Only show context menu if there's selected text or in an editable field
-    if (selectionText || isEditable) {
+    // Show context menu for text selection, editable fields, or images
+    if (selectionText || isEditable || mediaType === 'image') {
       // Build a minimal menu for text operations
       const template = [];
       
@@ -344,6 +344,27 @@ function createWindow() {
           });
         });
         if (template.length > 0) {
+          template.push({ type: 'separator' });
+        }
+      }
+      
+      // Image context menu options
+      if (mediaType === 'image' && srcURL) {
+        template.push(
+          {
+            label: 'Copy Image',
+            click: () => {
+              mainWindow.webContents.copyImageAt(params.x, params.y);
+            }
+          },
+          {
+            label: 'Save Image As...',
+            click: () => {
+              mainWindow.webContents.downloadURL(srcURL);
+            }
+          }
+        );
+        if (selectionText) {
           template.push({ type: 'separator' });
         }
       }
@@ -392,7 +413,7 @@ function createWindow() {
         menu.popup(mainWindow);
       }
     }
-    // If no text selected and not editable, suppress the context menu entirely
+    // If no text selected, not editable, and not an image, suppress the context menu entirely
   });
 
   // Load the app
