@@ -183,7 +183,7 @@ if (!gotTheLock) {
 
 // Development mode detection
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-const VITE_DEV_SERVER = 'http://localhost:8080';
+const VITE_DEV_SERVER = 'http://localhost:38347';
 const PORT = 44548;
 
 // Helper to get correct icon path in dev vs packaged app

@@ -10,7 +10,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:vite": "cd cinny && npm start",
-    "dev:electron": "wait-on http://localhost:8080 && cross-env NODE_ENV=development electron .",
+    "dev:electron": "wait-on http://localhost:38347 && cross-env NODE_ENV=development electron .",
     "build": "node -e \"require('fs').copyFileSync('config.json', 'cinny/config.json')\" && cd cinny && npm run build && cd .. && electron-builder --publish never",
     "build:linux": "npm run build -- --linux",
     "build:win": "npm run build -- --win",

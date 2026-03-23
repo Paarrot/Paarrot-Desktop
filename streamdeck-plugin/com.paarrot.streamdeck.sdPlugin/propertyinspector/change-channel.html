@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Change Channel Settings</title>
+  <style>
+    body {
+      margin: 10px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 13px;
+      color: #d0d0d0;
+      background-color: #2d2d2d;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+
+    select, input {
+      width: 100%;
+      padding: 6px 8px;
+      margin-bottom: 15px;
+      background-color: #3d3d3d;
+      border: 1px solid #555;
+      border-radius: 4px;
+      color: #d0d0d0;
+      font-size: 13px;
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: #0e99e0;
+    }
+
+    .info {
+      padding: 8px;
+      background-color: #3d3d3d;
+      border-left: 3px solid #0e99e0;
+      margin-bottom: 15px;
+      font-size: 12px;
+    }
+
+    .loading {
+      color: #888;
+      font-style: italic;
+    }
+
+    option {
+      background-color: #3d3d3d;
+      color: #d0d0d0;
+    }
+  </style>
+</head>
+<body>
+  <div class="info">
+    Select a room/channel to switch to when this button is pressed.
+  </div>
+
+  <label for="roomId">Channel/Room:</label>
+  <select id="roomId">
+    <option value="">Loading channels...</option>
+  </select>
+
+  <label for="customRoomId">Or enter Room ID manually:</label>
+  <input type="text" id="customRoomId" placeholder="!abc123:matrix.org" />
+
+  <script>
+    let websocket = null;
+    let uuid = null;
+    let actionInfo = null;
+    let currentSettings = {};
+
+    function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
+      uuid = inUUID;
+      actionInfo = JSON.parse(inActionInfo);
+      currentSettings = actionInfo.payload.settings || {};
+
+      websocket = new WebSocket('ws://127.0.0.1:' + inPort);
+
+      websocket.onopen = function() {
+        const json = {
+          event: inRegisterEvent,
+          uuid: inUUID
+        };
+        websocket.send(JSON.stringify(json));
+
+        // Request channel list
+        sendToPlugin({ event: 'getChannels' });
+      };
+
+      websocket.onmessage = function(evt) {
+        const message = JSON.parse(evt.data);
+
+        if (message.event === 'sendToPropertyInspector') {
+          if (message.payload.event === 'channelList') {
+            populateChannels(message.payload.channels);
+          }
+        }
+      };
+
+      // Set current values
+      if (currentSettings.roomId) {
+        document.getElementById('customRoomId').value = currentSettings.roomId;
+      }
+    }
+
+    function sendToPlugin(payload) {
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        const message = {
+          action: actionInfo.action,
+          event: 'sendToPlugin',
+          context: uuid,
+          payload: payload
+        };
+        websocket.send(JSON.stringify(message));
+      }
+    }
+
+    function saveSettings() {
+      const settings = {
+        roomId: document.getElementById('customRoomId').value || document.getElementById('roomId').value
+      };
+
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        const message = {
+          event: 'setSettings',
+          context: uuid,
+          payload: settings
+        };
+        websocket.send(JSON.stringify(message));
+      }
+    }
+
+    function populateChannels(channels) {
+      const select = document.getElementById('roomId');
+      select.innerHTML = '<option value="">-- Select a channel --</option>';
+
+      if (!channels || channels.length === 0) {
+        select.innerHTML = '<option value="">No channels available</option>';
+        return;
+      }
+
+      // Group by server
+      const grouped = {};
+      channels.forEach(channel => {
+        if (!grouped[channel.server]) {
+          grouped[channel.server] = [];
+        }
+        grouped[channel.server].push(channel);
+      });
+
+      // Add options grouped by server
+      Object.keys(grouped).sort().forEach(server => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = server;
+
+        grouped[server].forEach(channel => {
+          const option = document.createElement('option');
+          option.value = channel.roomId;
+          option.textContent = channel.name;
+          if (currentSettings.roomId === channel.roomId) {
+            option.selected = true;
+          }
+          optgroup.appendChild(option);
+        });
+
+        select.appendChild(optgroup);
+      });
+    }
+
+    // Event listeners
+    document.getElementById('roomId').addEventListener('change', saveSettings);
+    document.getElementById('customRoomId').addEventListener('input', saveSettings);
+  </script>
+</body>
+</html>

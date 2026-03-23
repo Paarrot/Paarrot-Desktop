@@ -1,0 +1,18 @@
+{
+  "name": "paarrot-streamdeck-plugin",
+  "version": "1.0.0",
+  "description": "Elgato Stream Deck plugin for Paarrot voice chat app",
+  "scripts": {
+    "build": "node build.js",
+    "validate": "node validate.js"
+  },
+  "keywords": [
+    "stream-deck",
+    "elgato",
+    "paarrot",
+    "voice-chat",
+    "matrix"
+  ],
+  "author": "Paarrot",
+  "license": "MIT"
+}

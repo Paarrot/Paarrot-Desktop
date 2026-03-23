@@ -1,0 +1,113 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "Actions": [
+    {
+      "DisableAutomaticStates": true,
+      "Icon": "images/toggle-mute",
+      "Name": "Toggle Mute",
+      "States": [
+        {
+          "Image": "images/mute-off",
+          "TitleAlignment": "bottom",
+          "ShowTitle": true
+        },
+        {
+          "Image": "images/mute-on",
+          "TitleAlignment": "bottom",
+          "ShowTitle": true
+        }
+      ],
+      "SupportedInMultiActions": true,
+      "Tooltip": "Toggle microphone mute",
+      "UUID": "com.paarrot.streamdeck.togglemute"
+    },
+    {
+      "DisableAutomaticStates": true,
+      "Icon": "images/toggle-deafen",
+      "Name": "Toggle Deafen",
+      "States": [
+        {
+          "Image": "images/deafen-off",
+          "TitleAlignment": "bottom",
+          "ShowTitle": true
+        },
+        {
+          "Image": "images/deafen-on",
+          "TitleAlignment": "bottom",
+          "ShowTitle": true
+        }
+      ],
+      "SupportedInMultiActions": true,
+      "Tooltip": "Toggle deafen (mute speakers)",
+      "UUID": "com.paarrot.streamdeck.toggledeafen"
+    },
+    {
+      "Icon": "images/change-channel",
+      "Name": "Change Channel",
+      "PropertyInspectorPath": "propertyinspector/change-channel.html",
+      "States": [
+        {
+          "Image": "images/change-channel",
+          "TitleAlignment": "bottom",
+          "ShowTitle": true
+        }
+      ],
+      "SupportedInMultiActions": true,
+      "Tooltip": "Switch to a specific channel/room",
+      "UUID": "com.paarrot.streamdeck.changechannel"
+    },
+    {
+      "Icon": "images/send-message",
+      "Name": "Send Message",
+      "PropertyInspectorPath": "propertyinspector/send-message.html",
+      "States": [
+        {
+          "Image": "images/send-message",
+          "TitleAlignment": "bottom",
+          "ShowTitle": true
+        }
+      ],
+      "SupportedInMultiActions": true,
+      "Tooltip": "Send a message to current room",
+      "UUID": "com.paarrot.streamdeck.sendmessage"
+    },
+    {
+      "Icon": "images/status",
+      "Name": "Get Status",
+      "States": [
+        {
+          "Image": "images/status",
+          "TitleAlignment": "bottom",
+          "ShowTitle": true
+        }
+      ],
+      "SupportedInMultiActions": false,
+      "Tooltip": "Display current status (mute/deafen state)",
+      "UUID": "com.paarrot.streamdeck.getstatus"
+    }
+  ],
+  "Author": "Paarrot",
+  "Category": "Paarrot",
+  "CategoryIcon": "images/paarrot",
+  "CodePath": "plugin/index.html",
+  "Description": "Control Paarrot voice chat (mute, deafen, channels, messages)",
+  "Icon": "images/paarrot",
+  "Name": "Paarrot",
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    },
+    {
+      "Platform": "mac",
+      "MinimumVersion": "10.14"
+    }
+  ],
+  "SDKVersion": 2,
+  "Software": {
+    "MinimumVersion": "6.6"
+  },
+  "UUID": "com.paarrot.streamdeck",
+  "URL": "https://github.com/yourusername/paarrot-streamdeck",
+  "Version": "1.0.0.0"
+}
