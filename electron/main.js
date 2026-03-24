@@ -257,18 +257,44 @@ async function downloadGiteaUpdate() {
 /**
  * Launches the downloaded installer (or opens the release page if no file was
  * downloaded) and quits the app.
+ * On Linux/AppImage: overwrites the running AppImage in-place and relaunches.
+ * On Windows: runs the installer and quits.
+ * On macOS: opens the DMG for manual installation.
  */
 function installGiteaUpdate() {
   if (downloadedUpdatePath && fs.existsSync(downloadedUpdatePath)) {
     if (process.platform === 'win32') {
       exec(`"${downloadedUpdatePath}"`);
+      app.quit();
+    } else if (process.platform === 'linux') {
+      const currentAppImage = process.env.APPIMAGE;
+      if (currentAppImage) {
+        try {
+          fs.chmodSync(downloadedUpdatePath, 0o755);
+          fs.copyFileSync(downloadedUpdatePath, currentAppImage);
+          fs.unlinkSync(downloadedUpdatePath);
+          console.log('AppImage replaced, relaunching...');
+          app.relaunch({ execPath: currentAppImage });
+          app.quit();
+        } catch (err) {
+          console.error('Failed to replace AppImage in-place, opening file instead:', err);
+          shell.openPath(downloadedUpdatePath);
+          app.quit();
+        }
+      } else {
+        // Not running as AppImage (e.g. dev/unpacked), just open it
+        shell.openPath(downloadedUpdatePath);
+        app.quit();
+      }
     } else {
+      // macOS: open the DMG for manual installation
       shell.openPath(downloadedUpdatePath);
+      app.quit();
     }
   } else if (pendingUpdateInfo?.htmlUrl) {
     shell.openExternal(pendingUpdateInfo.htmlUrl);
+    app.quit();
   }
-  app.quit();
 }
 
 
