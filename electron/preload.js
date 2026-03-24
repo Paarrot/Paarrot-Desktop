@@ -94,7 +94,8 @@ contextBridge.exposeInMainWorld('electron', {
     close: () => ipcRenderer.invoke('window:close'),
     isMaximized: () => ipcRenderer.invoke('window:is-maximized'),
     startDrag: () => ipcRenderer.invoke('window:start-drag'),
-    focus: () => ipcRenderer.invoke('window:focus')
+    focus: () => ipcRenderer.invoke('window:focus'),
+    flashFrame: (flash = true) => ipcRenderer.invoke('window:flash-frame', flash)
   },
   
   // Clipboard
@@ -102,8 +103,11 @@ contextBridge.exposeInMainWorld('electron', {
     readImage: () => ipcRenderer.invoke('read-clipboard-image'),
     writeText: (text) => ipcRenderer.invoke('write-clipboard-text', text)
   },
-  
-  // External URLs
+    // Audio
+  audio: {
+    playNotificationSound: (soundType = 'message') => ipcRenderer.invoke('play-notification-sound', soundType)
+  },
+    // External URLs
   shell: {
     openExternal: (url) => ipcRenderer.invoke('open-external-url', url)
   },

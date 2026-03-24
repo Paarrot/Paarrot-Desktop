@@ -629,6 +629,17 @@ ipcMain.handle('window:focus', () => {
   }
 });
 
+ipcMain.handle('window:flash-frame', (event, flash = true) => {
+  console.log('[Main] window:flash-frame called with:', flash);
+  if (mainWindow) {
+    console.log('[Main] Calling flashFrame on mainWindow');
+    mainWindow.flashFrame(flash);
+    return { success: true };
+  }
+  console.log('[Main] No mainWindow available');
+  return { success: false, error: 'No window' };
+});
+
 ipcMain.handle('window:is-maximized', () => {
   return mainWindow ? mainWindow.isMaximized() : false;
 });
@@ -678,6 +689,51 @@ ipcMain.handle('write-clipboard-text', async (event, text) => {
     clipboard.writeText(text);
     return { success: true };
   } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Play notification sound
+ipcMain.handle('play-notification-sound', async (event, soundType = 'message') => {
+  try {
+    const resourcesPath = app.isPackaged 
+      ? path.join(process.resourcesPath, 'app.asar.unpacked', 'cinny', 'public', 'sound')
+      : path.join(__dirname, '..', 'cinny', 'public', 'sound');
+    
+    const soundFile = soundType === 'invite' ? 'invite.ogg' : 'notification.ogg';
+    const soundPath = path.join(resourcesPath, soundFile);
+    
+    // Check if file exists
+    if (!fs.existsSync(soundPath)) {
+      console.error('[Audio] Sound file not found:', soundPath);
+      return { success: false, error: 'Sound file not found' };
+    }
+    
+    // Play sound based on platform
+    let command;
+    if (process.platform === 'win32') {
+      // Use PowerShell's SoundPlayer for Windows
+      // Note: PowerShell can't play OGG directly, so we use Add-Type for Windows Media Player
+      const psCommand = `Add-Type -AssemblyName presentationCore; $mediaPlayer = New-Object System.Windows.Media.MediaPlayer; $mediaPlayer.Open([uri]'${soundPath.replace(/\\/g, '\\\\')}'); $mediaPlayer.Play(); Start-Sleep -Milliseconds 100`;
+      command = `powershell -Command "${psCommand}"`;
+    } else if (process.platform === 'darwin') {
+      // Use afplay on macOS
+      command = `afplay "${soundPath}"`;
+    } else {
+      // Use paplay on Linux (PulseAudio) with fallback to aplay
+      command = `paplay "${soundPath}" || aplay "${soundPath}"`;
+    }
+    
+    // Execute the command without blocking
+    exec(command, (error) => {
+      if (error) {
+        console.error('[Audio] Failed to play sound:', error);
+      }
+    });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('[Audio] Error playing sound:', error);
     return { success: false, error: error.message };
   }
 });
