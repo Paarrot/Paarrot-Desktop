@@ -127,17 +127,13 @@ contextBridge.exposeInMainWorld('electron', {
   // Auto-updater
   updater: {
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
-    downloadUpdate: () => ipcRenderer.invoke('download-update'),
-    installUpdate: () => ipcRenderer.invoke('install-update'),
+    downloadAndInstallUpdate: () => ipcRenderer.invoke('download-and-install-update'),
     onUpdateAvailable: (callback) => {
       ipcRenderer.on('update-available', (_, info) => callback(info));
     },
     onUpdateDownloadProgress: (callback) => {
       ipcRenderer.on('update-download-progress', (_, progress) => callback(progress));
     },
-    onUpdateDownloaded: (callback) => {
-      ipcRenderer.on('update-downloaded', (_, info) => callback(info));
-    }
   },
   
   // Desktop capturer (for screen sharing)

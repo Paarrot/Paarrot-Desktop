@@ -934,6 +934,21 @@ ipcMain.handle('install-update', () => {
   return { success: true };
 });
 
+ipcMain.handle('download-and-install-update', async () => {
+  if (isDev) {
+    return { success: false, error: 'Updates are not available in development mode' };
+  }
+  try {
+    const result = await downloadGiteaUpdate();
+    if (!result.opened) {
+      installGiteaUpdate();
+    }
+    return { success: true, data: result };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
 // Screen capture / desktopCapturer handler
 ipcMain.handle('get-desktop-sources', async (event, opts) => {
   try {
