@@ -74,6 +74,9 @@ let tray = null;
 let isQuitting = false;
 let apiServer = null;
 
+// Allow audio playback without requiring a prior user gesture (needed for notification sounds)
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 // Set app name for notifications and system tray
 app.setName('Paarrot');
 
@@ -824,47 +827,20 @@ ipcMain.handle('write-clipboard-text', async (event, text) => {
   }
 });
 
-// Play notification sound
+// Play notification sound via the renderer's Chromium audio engine.
+// Chromium has native OGG support on all platforms, so this is always reliable.
 ipcMain.handle('play-notification-sound', async (event, soundType = 'message') => {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return { success: false, error: 'No main window' };
+  }
+  const soundFile = soundType === 'invite' ? 'invite.ogg' : 'notification.ogg';
   try {
-    const resourcesPath = app.isPackaged 
-      ? path.join(process.resourcesPath, 'app.asar.unpacked', 'cinny', 'public', 'sound')
-      : path.join(__dirname, '..', 'cinny', 'public', 'sound');
-    
-    const soundFile = soundType === 'invite' ? 'invite.ogg' : 'notification.ogg';
-    const soundPath = path.join(resourcesPath, soundFile);
-    
-    // Check if file exists
-    if (!fs.existsSync(soundPath)) {
-      console.error('[Audio] Sound file not found:', soundPath);
-      return { success: false, error: 'Sound file not found' };
-    }
-    
-    // Play sound based on platform
-    let command;
-    if (process.platform === 'win32') {
-      // Use PowerShell's SoundPlayer for Windows
-      // Note: PowerShell can't play OGG directly, so we use Add-Type for Windows Media Player
-      const psCommand = `Add-Type -AssemblyName presentationCore; $mediaPlayer = New-Object System.Windows.Media.MediaPlayer; $mediaPlayer.Open([uri]'${soundPath.replace(/\\/g, '\\\\')}'); $mediaPlayer.Play(); Start-Sleep -Milliseconds 100`;
-      command = `powershell -Command "${psCommand}"`;
-    } else if (process.platform === 'darwin') {
-      // Use afplay on macOS
-      command = `afplay "${soundPath}"`;
-    } else {
-      // Use paplay on Linux (PulseAudio) with fallback to aplay
-      command = `paplay "${soundPath}" || aplay "${soundPath}"`;
-    }
-    
-    // Execute the command without blocking
-    exec(command, (error) => {
-      if (error) {
-        console.error('[Audio] Failed to play sound:', error);
-      }
-    });
-    
+    await mainWindow.webContents.executeJavaScript(
+      `new Audio('./sound/${soundFile}').play().catch(() => {}); true;`
+    );
     return { success: true };
   } catch (error) {
-    console.error('[Audio] Error playing sound:', error);
+    console.error('[Audio] Failed to play sound:', error);
     return { success: false, error: error.message };
   }
 });
