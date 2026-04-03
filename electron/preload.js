@@ -134,6 +134,11 @@ contextBridge.exposeInMainWorld('electron', {
     onUpdateDownloadProgress: (callback) => {
       ipcRenderer.on('update-download-progress', (_, progress) => callback(progress));
     },
+    onUpdateDownloaded: (callback) => {
+      ipcRenderer.on('update-downloaded', (_, info) => callback(info));
+    },
+    downloadUpdate: () => ipcRenderer.invoke('download-update'),
+    installUpdate: () => ipcRenderer.invoke('install-update'),
   },
   
   // Desktop capturer (for screen sharing)
