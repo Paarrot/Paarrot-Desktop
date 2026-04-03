@@ -333,13 +333,27 @@ function getIconPath(iconName) {
 
 function createWindow() {
   // Restore window state or use defaults
-  const windowState = store.get('windowState', {
-    width: 1280,
-    height: 905,
-    x: undefined,
-    y: undefined,
-    isMaximized: false
-  });
+  const savedState = store.get('windowState', {});
+  
+  // Validate saved position is within visible screen bounds
+  const { screen } = require('electron');
+  let validPosition = false;
+  if (savedState.x !== undefined && savedState.y !== undefined) {
+    const displays = screen.getAllDisplays();
+    validPosition = displays.some((display) => {
+      const { x, y, width, height } = display.workArea;
+      return savedState.x >= x && savedState.x < x + width &&
+             savedState.y >= y && savedState.y < y + height;
+    });
+  }
+
+  const windowState = {
+    width: savedState.width ?? 1280,
+    height: savedState.height ?? 905,
+    x: validPosition ? savedState.x : undefined,
+    y: validPosition ? savedState.y : undefined,
+    isMaximized: savedState.isMaximized ?? false,
+  };
 
   mainWindow = new BrowserWindow({
     width: windowState.width,
