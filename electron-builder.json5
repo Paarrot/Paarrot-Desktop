@@ -28,6 +28,11 @@
       "from": "icons",
       "to": "icons",
       "filter": ["**/*"]
+    },
+    {
+      "from": "cinny/public/sound",
+      "to": "sound",
+      "filter": ["**/*"]
     }
   ],
   "linux": {

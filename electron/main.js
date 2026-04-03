@@ -841,6 +841,11 @@ ipcMain.handle('write-clipboard-text', async (event, text) => {
   }
 });
 
+ipcMain.handle('get-sound-base-url', () => {
+  if (isDev) return null; // renderer uses ./sound/ relative path in dev
+  return `file://${path.join(process.resourcesPath, 'sound').replace(/\\/g, '/')}`;
+});
+
 // Play notification sound via the renderer's Chromium audio engine.
 // Chromium has native OGG support on all platforms, so this is always reliable.
 ipcMain.handle('play-notification-sound', async (event, soundType = 'message') => {
@@ -848,9 +853,14 @@ ipcMain.handle('play-notification-sound', async (event, soundType = 'message') =
     return { success: false, error: 'No main window' };
   }
   const soundFile = soundType === 'invite' ? 'invite.ogg' : 'notification.ogg';
+  // In dev, Vite serves sounds via HTTP so relative path works.
+  // In production, sounds are in resources/sound/ as plain files (extraResources).
+  const audioSrc = isDev
+    ? `./sound/${soundFile}`
+    : `file://${path.join(process.resourcesPath, 'sound', soundFile).replace(/\\/g, '/')}`;
   try {
     await mainWindow.webContents.executeJavaScript(
-      `new Audio('./sound/${soundFile}').play().catch(() => {}); true;`
+      `new Audio('${audioSrc}').play().catch(() => {}); true;`
     );
     return { success: true };
   } catch (error) {

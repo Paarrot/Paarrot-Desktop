@@ -105,7 +105,8 @@ contextBridge.exposeInMainWorld('electron', {
   },
     // Audio
   audio: {
-    playNotificationSound: (soundType = 'message') => ipcRenderer.invoke('play-notification-sound', soundType)
+    playNotificationSound: (soundType = 'message') => ipcRenderer.invoke('play-notification-sound', soundType),
+    getSoundBaseUrl: () => ipcRenderer.invoke('get-sound-base-url'),
   },
     // External URLs
   shell: {
