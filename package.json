@@ -1,6 +1,6 @@
 {
   "name": "paarrot",
-  "version": "4.11.65",
+  "version": "4.11.66",
   "description": "Paarrot - A Matrix client based on Cinny",
   "homepage": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop",
   "main": "electron/main.js",
