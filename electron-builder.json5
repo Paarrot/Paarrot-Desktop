@@ -88,8 +88,7 @@
     "name": "Paarrot",
     "loadingGif": "icons/icon.png",
     "iconUrl": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/raw/branch/main/icons/icon.ico",
-    "remoteReleases": false,
-    "useAppIdAsId": true
+    "remoteReleases": false
   },
   "publish": {
     "provider": "generic",
