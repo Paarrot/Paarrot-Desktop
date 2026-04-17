@@ -283,3 +283,45 @@ jobs:
           done
           
           echo "Release complete!"
+      
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.ghtoken }}
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TAG_NAME="v${VERSION}"
+          GITHUB_REPO="Paarrot/Paarrot-Desktop"
+          
+          # Check if release exists on GitHub
+          RELEASE_ID=$(curl -s -H "Authorization: token ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPO}/releases/tags/${TAG_NAME}" | jq -r '.id // empty')
+          
+          if [ -z "$RELEASE_ID" ]; then
+            echo "Creating new GitHub release for ${TAG_NAME}..."
+            RELEASE_ID=$(curl -s -X POST \
+              -H "Authorization: token ${GH_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"tag_name\": \"${TAG_NAME}\", \"name\": \"Release ${TAG_NAME}\", \"body\": \"Release ${VERSION}\", \"draft\": false, \"prerelease\": false}" \
+              "https://api.github.com/repos/${GITHUB_REPO}/releases" | jq -r '.id')
+            echo "Created GitHub release with ID: ${RELEASE_ID}"
+          else
+            echo "GitHub release exists with ID: ${RELEASE_ID}"
+          fi
+          
+          # Upload assets to GitHub
+          echo "Uploading assets to GitHub..."
+          UPLOAD_URL=$(curl -s -H "Authorization: token ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPO}/releases/${RELEASE_ID}" | jq -r '.upload_url' | sed 's/{?name,label}//')
+          
+          for FILE in release-files/*; do
+            FILENAME=$(basename "$FILE")
+            echo "Uploading ${FILENAME} to GitHub..."
+            curl -s -X POST \
+              -H "Authorization: token ${GH_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@${FILE}" \
+              "${UPLOAD_URL}?name=${FILENAME}"
+            echo ""
+          done
+          
+          echo "GitHub release complete!"

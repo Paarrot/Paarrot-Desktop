@@ -90,9 +90,18 @@
     "iconUrl": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/raw/branch/main/icons/icon.ico",
     "remoteReleases": false
   },
-  "publish": {
-    "provider": "generic",
-    "url": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/download/v${version}",
-    "channel": "latest"
-  }
+  "publish": [
+    {
+      "provider": "generic",
+      "url": "http://synbox.ruv.wtf:8418/litruv/cinny-desktop/releases/download/v${version}",
+      "channel": "latest"
+    },
+    {
+      "provider": "github",
+      "owner": "Paarrot",
+      "repo": "Paarrot-Desktop",
+      "token": "${env.GH_TOKEN}",
+      "releaseType": "release"
+    }
+  ]
 }
