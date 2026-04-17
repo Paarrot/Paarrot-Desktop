@@ -1,0 +1,9 @@
+{
+  "name": "Example Plugin",
+  "version": "2.0.0",
+  "description": "A comprehensive example plugin demonstrating all plugin API features including commands, interceptors, settings, and more",
+  "author": "Paarrot Team",
+  "homepage": "https://github.com/Paarrot/cinny-desktop",
+  "thumbnail": "https://raw.githubusercontent.com/Paarrot/cinny-desktop/main/icons/icon.png",
+  "tags": ["example", "demo", "utility", "commands", "interceptors"]
+}

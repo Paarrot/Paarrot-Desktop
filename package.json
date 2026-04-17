@@ -23,6 +23,7 @@
   },
   "license": "AGPL-3.0-only",
   "dependencies": {
+    "adm-zip": "^0.5.16",
     "body-parser": "2.2.2",
     "cors": "2.8.6",
     "electron-squirrel-startup": "^1.0.1",

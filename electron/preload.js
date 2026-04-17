@@ -167,6 +167,15 @@ contextBridge.exposeInMainWorld('electron', {
       ipcRenderer.on('notification:navigate', handler);
       return () => ipcRenderer.removeListener('notification:navigate', handler);
     }
+  },
+  
+  // Plugin management
+  plugins: {
+    getPath: () => ipcRenderer.invoke('plugin:get-path'),
+    download: (pluginId, downloadUrl, name) => ipcRenderer.invoke('plugin:download', { pluginId, downloadUrl, name }),
+    list: () => ipcRenderer.invoke('plugin:list'),
+    uninstall: (pluginId) => ipcRenderer.invoke('plugin:uninstall', pluginId),
+    readPluginCode: (pluginId) => ipcRenderer.invoke('plugin:read-code', pluginId)
   }
 });
 

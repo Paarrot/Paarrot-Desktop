@@ -8,6 +8,7 @@ const open = require('open');
 const PaarrotAPIServer = require('./api-server');
 const https = require('https');
 const http = require('http');
+const AdmZip = require('adm-zip');
 
 // Handle Squirrel events for Windows installer
 if (require('electron-squirrel-startup')) {
@@ -1030,6 +1031,187 @@ ipcMain.handle('show-notification', async (event, { title, body, icon, roomId, e
   }
 });
 
+// Plugin management
+const getPluginsDir = () => {
+  try {
+    const pluginsPath = path.join(app.getPath('userData'), 'plugins');
+    if (!fs.existsSync(pluginsPath)) {
+      fs.mkdirSync(pluginsPath, { recursive: true });
+    }
+    return pluginsPath;
+  } catch (error) {
+    console.error('Failed to get plugins directory:', error);
+    throw error;
+  }
+};
+
+ipcMain.handle('plugin:get-path', async () => {
+  try {
+    // Wait for app to be ready before accessing userData path
+    await app.whenReady();
+    return { success: true, data: getPluginsDir() };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('plugin:download', async (event, { pluginId, downloadUrl, name }) => {
+  try {
+    // Wait for app to be ready before accessing userData path
+    await app.whenReady();
+    const pluginsDir = getPluginsDir();
+    const pluginDir = path.join(pluginsDir, pluginId);
+    
+    // Check if already installed
+    if (fs.existsSync(pluginDir)) {
+      return { success: false, error: 'Plugin already installed' };
+    }
+    
+    // Download the zip file
+    const tempZipPath = path.join(app.getPath('temp'), `${pluginId}.zip`);
+    
+    await new Promise((resolve, reject) => {
+      const protocol = downloadUrl.startsWith('https') ? https : http;
+      const file = fs.createWriteStream(tempZipPath);
+      
+      protocol.get(downloadUrl, (response) => {
+        if (response.statusCode === 302 || response.statusCode === 301) {
+          // Handle redirect
+          const redirectUrl = response.headers.location;
+          const redirectProtocol = redirectUrl.startsWith('https') ? https : http;
+          redirectProtocol.get(redirectUrl, (redirectResponse) => {
+            redirectResponse.pipe(file);
+            file.on('finish', () => {
+              file.close(resolve);
+            });
+          }).on('error', reject);
+        } else {
+          response.pipe(file);
+          file.on('finish', () => {
+            file.close(resolve);
+          });
+        }
+      }).on('error', (err) => {
+        fs.unlinkSync(tempZipPath);
+        reject(err);
+      });
+    });
+    
+    // Extract the zip file
+    const zip = new AdmZip(tempZipPath);
+    zip.extractAllTo(pluginDir, true);
+    
+    // Clean up temp file
+    fs.unlinkSync(tempZipPath);
+    
+    // Store metadata
+    const metadataPath = path.join(pluginDir, 'plugin-metadata.json');
+    fs.writeFileSync(metadataPath, JSON.stringify({
+      id: pluginId,
+      name: name,
+      installedDate: new Date().toISOString(),
+    }, null, 2));
+    
+    return { success: true, data: { path: pluginDir } };
+  } catch (error) {
+    console.error('Failed to download plugin:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('plugin:list', async () => {
+  try {
+    // Wait for app to be ready before accessing userData path
+    await app.whenReady();
+    const pluginsDir = getPluginsDir();
+    const plugins = [];
+    
+    if (fs.existsSync(pluginsDir)) {
+      const items = fs.readdirSync(pluginsDir);
+      
+      for (const item of items) {
+        const itemPath = path.join(pluginsDir, item);
+        const stats = fs.statSync(itemPath);
+        
+        if (stats.isDirectory()) {
+          const metadataPath = path.join(itemPath, 'plugin-metadata.json');
+          if (fs.existsSync(metadataPath)) {
+            try {
+              const metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+              plugins.push({
+                id: item,
+                path: itemPath,
+                ...metadata
+              });
+            } catch (err) {
+              console.error(`Failed to read metadata for plugin ${item}:`, err);
+            }
+          }
+        }
+      }
+    }
+    
+    return { success: true, data: plugins };
+  } catch (error) {
+    console.error('Failed to list plugins:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('plugin:uninstall', async (event, pluginId) => {
+  try {
+    // Wait for app to be ready before accessing userData path
+    await app.whenReady();
+    const pluginsDir = getPluginsDir();
+    const pluginDir = path.join(pluginsDir, pluginId);
+    
+    if (!fs.existsSync(pluginDir)) {
+      return { success: false, error: 'Plugin not found' };
+    }
+    
+    // Recursively delete the plugin directory
+    const deleteDir = (dirPath) => {
+      if (fs.existsSync(dirPath)) {
+        fs.readdirSync(dirPath).forEach((file) => {
+          const curPath = path.join(dirPath, file);
+          if (fs.lstatSync(curPath).isDirectory()) {
+            deleteDir(curPath);
+          } else {
+            fs.unlinkSync(curPath);
+          }
+        });
+        fs.rmdirSync(dirPath);
+      }
+    };
+    
+    deleteDir(pluginDir);
+    
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to uninstall plugin:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('plugin:read-code', async (event, pluginId) => {
+  try {
+    await app.whenReady();
+    const pluginsDir = getPluginsDir();
+    const pluginPath = path.join(pluginsDir, pluginId, 'index.js');
+    
+    if (!fs.existsSync(pluginPath)) {
+      return { success: false, error: 'Plugin index.js not found' };
+    }
+    
+    const code = fs.readFileSync(pluginPath, 'utf8');
+    return { success: true, data: code };
+  } catch (error) {
+    console.error('Failed to read plugin code:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 console.log('Paarrot Electron main process started');
 console.log('Development mode:', isDev);
 console.log('Platform:', process.platform);
+console.log('Plugin handlers registered');
