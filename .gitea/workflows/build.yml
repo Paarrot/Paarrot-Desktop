@@ -98,7 +98,7 @@ jobs:
       - name: Build Electron app
         run: npm run build:win
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GHTOKEN }}
       
       - name: Upload Squirrel Setup (x64)
         uses: actions/upload-artifact@v3
@@ -168,7 +168,7 @@ jobs:
       - name: Build Electron app
         run: npm run build:linux
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GHTOKEN }}
       
       - name: Upload AppImage
         uses: actions/upload-artifact@v3
