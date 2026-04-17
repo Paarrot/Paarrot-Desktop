@@ -286,7 +286,7 @@ jobs:
       
       - name: Create GitHub Release
         env:
-          GH_TOKEN: ${{ secrets.ghtoken }}
+          GH_TOKEN: ${{ secrets.GHTOKEN }}
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
           TAG_NAME="v${VERSION}"
