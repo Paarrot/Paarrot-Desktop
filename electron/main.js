@@ -1045,6 +1045,49 @@ const getPluginsDir = () => {
   }
 };
 
+/**
+ * Resolves plugin entry file from directory.
+ * Supports direct `index.js` or `package.json#main` entries.
+ */
+const resolvePluginEntryFromDir = (pluginDir) => {
+  const packageJsonPath = path.join(pluginDir, 'package.json');
+
+  if (fs.existsSync(packageJsonPath)) {
+    try {
+      const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+      if (typeof packageJson.main === 'string') {
+        const mainPath = path.resolve(pluginDir, packageJson.main);
+        if (fs.existsSync(mainPath)) {
+          return mainPath;
+        }
+      }
+    } catch (error) {
+      console.warn(`Failed to parse package.json in ${pluginDir}:`, error);
+    }
+  }
+
+  const indexPath = path.join(pluginDir, 'index.js');
+  return fs.existsSync(indexPath) ? indexPath : null;
+};
+
+/**
+ * Resolves plugin entry file from extracted plugin directory.
+ * Handles archives that unpack into single nested root folder.
+ */
+const resolvePluginEntryPath = (pluginDir) => {
+  const directEntry = resolvePluginEntryFromDir(pluginDir);
+  if (directEntry) {
+    return directEntry;
+  }
+
+  const childDirectories = fs.readdirSync(pluginDir, { withFileTypes: true }).filter((entry) => entry.isDirectory());
+  if (childDirectories.length !== 1) {
+    return null;
+  }
+
+  return resolvePluginEntryFromDir(path.join(pluginDir, childDirectories[0].name));
+};
+
 ipcMain.handle('plugin:get-path', async () => {
   try {
     // Wait for app to be ready before accessing userData path
@@ -1197,9 +1240,10 @@ ipcMain.handle('plugin:read-code', async (event, pluginId) => {
   try {
     await app.whenReady();
     const pluginsDir = getPluginsDir();
-    const pluginPath = path.join(pluginsDir, pluginId, 'index.js');
+    const pluginDir = path.join(pluginsDir, pluginId);
+    const pluginPath = resolvePluginEntryPath(pluginDir);
     
-    if (!fs.existsSync(pluginPath)) {
+    if (!pluginPath || !fs.existsSync(pluginPath)) {
       return { success: false, error: 'Plugin index.js not found' };
     }
     
