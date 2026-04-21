@@ -70,7 +70,7 @@ Plugins run with access to your Matrix client and can:
 
 ## Developing Plugins
 
-Want to create your own plugin? Check out the [Plugin Development Guide](./cinny/src/app/features/settings/plugins/PLUGIN_DEVELOPMENT.md).
+Want to create your own plugin? Check out the [Plugin API Reference](docs/PLUGIN_API.md).
 
 ### Quick Start
 
@@ -101,19 +101,19 @@ Plugins have access to:
 - **Matrix Client**: Full matrix-js-sdk client instance
 - **React**: For building UI components
 - **Commands**: Register custom slash commands
-- **UI Hooks**: Inject UI elements
-- **Settings**: Add custom settings sections
-- **Utilities**: Notifications and helpers
+- **UI Buttons**: Inject buttons into 11 locations across the app (nav lists, toolbars, headers, sidebar)
+- **UI Renderers**: Custom message and content renderers
+- **Settings**: Add custom settings sections per plugin
+- **Themes**: Register custom themes that appear in the theme selector
+- **Matrix Events**: Hook into raw Matrix events
+- **Timers**: Background intervals and timeouts, auto-cleaned on unload
+- **Notifications**: System notifications
 
-See the [Plugin Development Guide](./cinny/src/app/features/settings/plugins/PLUGIN_DEVELOPMENT.md) for complete API documentation.
+See the [Plugin API Reference](docs/PLUGIN_API.md) and [Button Registration API](docs/PLUGIN_BUTTON_API.md) for complete documentation.
 
 ## Example Plugins
 
-Check out the `example-plugin/` directory for a simple example demonstrating:
-- Matrix client access
-- Event listeners
-- Custom commands
-- Notifications
+Check out the `example-plugin/` directory for a simple example, or the `plugins/example-showcase-plugin/` for a full demonstration of all 11 UI button locations.
 
 ## Troubleshooting
 
@@ -147,7 +147,8 @@ Submit your plugins there to make them available in the marketplace!
 
 ## Support
 
-- **Documentation**: [Plugin Development Guide](./cinny/src/app/features/settings/plugins/PLUGIN_DEVELOPMENT.md)
+- **Plugin API Reference**: [docs/PLUGIN_API.md](docs/PLUGIN_API.md)
+- **Button API Reference**: [docs/PLUGIN_BUTTON_API.md](docs/PLUGIN_BUTTON_API.md)
 - **Issues**: https://github.com/Paarrot/cinny-desktop/issues
 - **Community**: Join our Matrix room for plugin development help
 

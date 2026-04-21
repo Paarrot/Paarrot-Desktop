@@ -16,11 +16,17 @@ All requested features have been implemented! 🎉
 - Full MessageContext with content, roomId, metadata
 - Async support for interceptors
 
-### 3. ✅ Custom Renderers
-- **Register**: `ctx.ui.registerRenderer("message", (msg, defaultRenderer) => { /* render */ })`
-- **Unregister**: `ctx.ui.unregisterRenderer("message")`
-- Fallback to default renderer support
-- Discord-mod-tier customization enabled
+### 3. ✅ Custom Renderers & Button Registration
+- **Register renderer**: `ctx.ui.registerRenderer("message", (msg, defaultRenderer) => { /* render */ })`
+- **Unregister renderer**: `ctx.ui.unregisterRenderer("message")`
+- **Register button**: `ctx.ui.registerButton({ id, location, label, icon, onClick })`
+- **Unregister button**: `ctx.ui.unregisterButton(id)`
+- 11 UI locations across nav lists, toolbars, headers, sidebar, and menus
+- Nav list rows (icon + label) for `channel-list`, `home-section`, `direct-messages`
+- Icon buttons for all other locations
+- Positioning and grouping support (`before`, `after`, `group`, `order`)
+- Auto-cleanup on plugin unload
+- See [PLUGIN_BUTTON_API.md](PLUGIN_BUTTON_API.md) for full reference
 
 ### 4. ✅ Settings UI Per Plugin
 - **Define schema**: `ctx.settings.define({ theme: { type: "select", options: [...] } })`
@@ -162,6 +168,8 @@ interface PluginContext {
   };
   
   ui: {
+    registerButton: (button: UIButtonDefinition) => void;
+    unregisterButton: (id: string) => void;
     registerRenderer: (type: string, renderer: CustomRenderer) => void;
     unregisterRenderer: (type: string) => void;
   };

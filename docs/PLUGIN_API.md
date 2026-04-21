@@ -9,7 +9,8 @@ Complete reference for developing plugins for Paarrot/Cinny Desktop.
 - [Plugin Context API](#plugin-context-api)
   - [Commands](#commands)
   - [Message Interceptors](#message-interceptors)
-  - [Custom Renderers](#custom-renderers)
+  - [UI: Button Registration](#ui-button-registration)
+  - [UI: Custom Renderers](#custom-renderers)
   - [Settings](#settings)
   - [Themes](#themes)
   - [Matrix Events](#matrix-events)
@@ -322,6 +323,8 @@ ctx.ui.registerRenderer("image", (data, defaultRenderer) => {
 
 ```typescript
 interface UIAPI {
+  registerButton(button: UIButtonDefinition): void;
+  unregisterButton(id: string): void;
   registerRenderer(
     type: string,
     renderer: (data: any, defaultRenderer?: () => ReactNode) => ReactNode
@@ -332,6 +335,97 @@ type CustomRenderer = (
   data: any,
   defaultRenderer?: () => ReactNode
 ) => ReactNode;
+```
+
+---
+
+### UI: Button Registration
+
+Inject buttons into various parts of the Paarrot UI. Buttons render in two visual styles depending on location — **nav list rows** (icon + label, full width) or **icon buttons** (compact, toolbar-style).
+
+See [PLUGIN_BUTTON_API.md](PLUGIN_BUTTON_API.md) for the complete reference including positioning and grouping examples.
+
+#### Register a Button
+
+```javascript
+ctx.ui.registerButton({
+  id: 'my-button',
+  location: 'text-composer-toolbar',
+  label: 'My Tool',
+  icon: '🔧',
+  onClick: () => ctx.log('clicked!')
+});
+```
+
+#### UI Locations — Nav List Rows
+
+| Location | Where it appears |
+|---|---|
+| `channel-list` | Space channel list, below Lobby and Message Search |
+| `home-section` | Home panel, inside the Rooms category above the room list |
+| `direct-messages` | DMs panel, below "Create Chat" and above the CHATS dropdown |
+
+#### UI Locations — Icon Buttons
+
+| Location | Where it appears |
+|---|---|
+| `text-composer-toolbar` | Message composer toolbar (alongside emoji, sticker buttons) |
+| `composer-actions` | Left side of the composer, beside the `+` attach button |
+| `room-header` | Top room header bar, before the ⋮ menu |
+| `room-menu` | Room ⋮ dropdown menu |
+| `message-actions` | Message hover action bar |
+| `user-menu` | Right-click popup on the user avatar |
+| `search-notification-section` | Notifications page header (right side) |
+| `sidebar-actions` | Left sidebar — above Explore Servers icon, and above Search icon in the sticky bottom section |
+
+#### Positioning
+
+```javascript
+ctx.ui.registerButton({
+  id: 'my-button',
+  location: 'text-composer-toolbar',
+  label: 'My Tool',
+  icon: '🔧',
+  position: {
+    after: 'emoji-picker-button',
+    group: 'my-tools',
+    order: 1
+  },
+  onClick: () => ctx.log('clicked!')
+});
+```
+
+#### Unregister
+
+```javascript
+ctx.ui.unregisterButton('my-button');
+// All buttons are automatically unregistered on plugin unload
+```
+
+#### API Reference
+
+```typescript
+type UILocation =
+  | 'channel-list' | 'direct-messages' | 'home-section'
+  | 'text-composer-toolbar' | 'composer-actions'
+  | 'room-header' | 'room-menu' | 'message-actions'
+  | 'user-menu' | 'search-notification-section' | 'sidebar-actions';
+
+interface UIButtonDefinition {
+  id: string;
+  location: UILocation;
+  label: string;
+  icon?: string;
+  position?: UIButtonPosition;
+  onClick?: () => void | Promise<void>;
+}
+
+interface UIButtonPosition {
+  before?: string;
+  after?: string;
+  group?: string;
+  order?: number;
+}
 ```
 
 ---
