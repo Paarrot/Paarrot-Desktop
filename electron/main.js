@@ -86,6 +86,20 @@ app.setName('Paarrot');
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
 
+// Set feed URL manually as fallback if app-update.yml is missing
+if (!isDev) {
+  try {
+    autoUpdater.setFeedURL({
+      provider: 'github',
+      owner: 'Paarrot',
+      repo: 'Paarrot-Desktop',
+      releaseType: 'release'
+    });
+  } catch (err) {
+    console.warn('Failed to set feed URL:', err);
+  }
+}
+
 autoUpdater.on('checking-for-update', () => {
   console.log('Checking for updates...');
   if (mainWindow) {

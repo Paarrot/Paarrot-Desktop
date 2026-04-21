@@ -1,0 +1,4 @@
+provider: github
+owner: Paarrot
+repo: Paarrot-Desktop
+updaterCacheDirName: paarrot-updater

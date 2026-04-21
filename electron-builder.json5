@@ -10,6 +10,7 @@
   "files": [
     "electron/**/*",
     "cinny/dist/**/*",
+    "dev-app-update.yml",
     "!**/*.map",
     "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
     "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",

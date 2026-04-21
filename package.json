@@ -3,6 +3,10 @@
   "version": "4.11.90",
   "description": "Paarrot - A Matrix client based on Cinny",
   "homepage": "https://github.com/Paarrot/Paarrot-Desktop",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Paarrot/Paarrot-Desktop.git"
+  },
   "main": "electron/main.js",
   "engines": {
     "node": ">=18.0.0"
@@ -12,6 +16,7 @@
     "dev:vite": "cd cinny && npm start",
     "dev:electron": "wait-on http://localhost:38347 && cross-env NODE_ENV=development electron .",
     "build": "node -e \"require('fs').copyFileSync('config.json', 'cinny/config.json')\" && cd cinny && npm run build && cd .. && electron-builder --publish always",
+    "build:local": "node -e \"require('fs').copyFileSync('config.json', 'cinny/config.json')\" && cd cinny && npm run build && cd .. && electron-builder",
     "build:linux": "npm run build -- --linux",
     "build:win": "npm run build -- --win",
     "postman:generate": "node scripts/generate-postman-collection.js"
