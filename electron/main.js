@@ -9,6 +9,7 @@ const PaarrotAPIServer = require('./api-server');
 const https = require('https');
 const http = require('http');
 const AdmZip = require('adm-zip');
+const { autoUpdater } = require('electron-updater');
 
 // Handle Squirrel events for Windows installer
 if (require('electron-squirrel-startup')) {
@@ -81,225 +82,62 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 // Set app name for notifications and system tray
 app.setName('Paarrot');
 
-// Gitea update configuration
-const GITEA_API_BASE = 'http://synbox.ruv.wtf:8418/api/v1';
-const GITEA_REPO = 'litruv/cinny-desktop';
+// Configure auto-updater
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
 
-let pendingUpdateInfo = null;
-let downloadedUpdatePath = null;
-
-/**
- * Compares two semver-style version strings.
- * @param {string} v1
- * @param {string} v2
- * @returns {number} 1 if v1 > v2, -1 if v1 < v2, 0 if equal
- */
-function compareVersions(v1, v2) {
-  const p1 = v1.split('.').map(Number);
-  const p2 = v2.split('.').map(Number);
-  for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
-    const a = p1[i] || 0;
-    const b = p2[i] || 0;
-    if (a > b) return 1;
-    if (a < b) return -1;
-  }
-  return 0;
-}
-
-/**
- * Performs an HTTP/HTTPS GET request and resolves with parsed JSON.
- * Follows redirects automatically.
- * @param {string} url
- * @returns {Promise<any>}
- */
-function httpGetJson(url) {
-  return new Promise((resolve, reject) => {
-    const protocol = url.startsWith('https') ? https : http;
-    const options = { headers: { 'User-Agent': `Paarrot/${app.getVersion()}` } };
-    protocol.get(url, options, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return httpGetJson(res.headers.location).then(resolve).catch(reject);
-      }
-      let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => {
-        try { resolve(JSON.parse(data)); }
-        catch { resolve(data); }
-      });
-    }).on('error', reject);
-  });
-}
-
-/**
- * Downloads a file from a URL to a destination path, reporting progress.
- * Follows redirects automatically.
- * @param {string} url
- * @param {string} dest
- * @param {(percent: number) => void} onProgress
- * @returns {Promise<void>}
- */
-function downloadFile(url, dest, onProgress) {
-  return new Promise((resolve, reject) => {
-    const doRequest = (requestUrl) => {
-      const protocol = requestUrl.startsWith('https') ? https : http;
-      const options = { headers: { 'User-Agent': `Paarrot/${app.getVersion()}` } };
-      protocol.get(requestUrl, options, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          doRequest(res.headers.location);
-          return;
-        }
-        const total = parseInt(res.headers['content-length'] || '0', 10);
-        let transferred = 0;
-        const file = fs.createWriteStream(dest);
-        res.on('data', (chunk) => {
-          transferred += chunk.length;
-          if (total > 0) onProgress(Math.round((transferred / total) * 100));
-        });
-        res.pipe(file);
-        file.on('finish', () => file.close(resolve));
-        file.on('error', reject);
-      }).on('error', reject);
-    };
-    doRequest(url);
-  });
-}
-
-/**
- * Checks the Gitea API for a newer release. Emits 'update-available' to the
- * renderer if one is found. Does NOT require a latest.yml asset.
- * @returns {Promise<{updateAvailable: boolean, info?: object}>}
- */
-async function checkForGiteaUpdate() {
-  const currentVersion = app.getVersion();
-  console.log('Checking for updates, current version:', currentVersion);
-
-  const releases = await httpGetJson(`${GITEA_API_BASE}/repos/${GITEA_REPO}/releases?limit=1`);
-
-  if (!Array.isArray(releases) || releases.length === 0) {
-    console.log('No releases found');
-    return { updateAvailable: false };
-  }
-
-  const latest = releases[0];
-  const latestVersion = latest.tag_name.replace(/^v/, '');
-  console.log('Latest release version:', latestVersion);
-
-  if (compareVersions(latestVersion, currentVersion) <= 0) {
-    console.log('No update available');
-    return { updateAvailable: false };
-  }
-
-  const assets = latest.assets || [];
-  let downloadUrl = null;
-
-  if (process.platform === 'win32') {
-    const asset = assets.find((a) => /win.*\.exe$/i.test(a.name) || /Setup.*\.exe$/i.test(a.name));
-    downloadUrl = asset?.browser_download_url || null;
-  } else if (process.platform === 'linux') {
-    const asset = assets.find((a) => a.name.endsWith('.AppImage'));
-    downloadUrl = asset?.browser_download_url || null;
-  } else if (process.platform === 'darwin') {
-    const asset = assets.find((a) => a.name.endsWith('.dmg'));
-    downloadUrl = asset?.browser_download_url || null;
-  }
-
-  pendingUpdateInfo = {
-    version: latestVersion,
-    releaseNotes: latest.body || '',
-    releaseDate: latest.published_at,
-    downloadUrl,
-    htmlUrl: latest.html_url,
-  };
-
-  console.log('Update available:', latestVersion, '| asset URL:', downloadUrl || '(none, will use release page)');
-
+autoUpdater.on('checking-for-update', () => {
+  console.log('Checking for updates...');
   if (mainWindow) {
-    mainWindow.webContents.send('update-available', pendingUpdateInfo);
+    mainWindow.webContents.send('update-checking');
   }
+});
 
-  return { updateAvailable: true, info: pendingUpdateInfo };
-}
-
-/**
- * Downloads the pending update asset to the temp directory, reporting progress.
- * If no direct asset URL is available, opens the release page in the browser.
- * @returns {Promise<{success: boolean, opened?: boolean}>}
- */
-async function downloadGiteaUpdate() {
-  if (!pendingUpdateInfo) throw new Error('No pending update info');
-
-  const { downloadUrl, htmlUrl, version } = pendingUpdateInfo;
-
-  if (!downloadUrl) {
-    shell.openExternal(htmlUrl);
-    return { success: true, opened: true };
-  }
-
-  const ext = downloadUrl.split('.').pop();
-  const tmpDir = path.join(app.getPath('temp'), 'paarrot-update');
-  if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
-
-  const destPath = path.join(tmpDir, `Paarrot-${version}-update.${ext}`);
-
-  await downloadFile(downloadUrl, destPath, (percent) => {
-    console.log(`Download progress: ${percent}%`);
-    if (mainWindow) {
-      mainWindow.webContents.send('update-download-progress', { percent, transferred: 0, total: 0 });
-    }
-  });
-
-  downloadedUpdatePath = destPath;
-  console.log('Update downloaded to:', destPath);
-
+autoUpdater.on('update-available', (info) => {
+  console.log('Update available:', info.version);
   if (mainWindow) {
-    mainWindow.webContents.send('update-downloaded', pendingUpdateInfo);
+    mainWindow.webContents.send('update-available', {
+      version: info.version,
+      releaseNotes: info.releaseNotes,
+      releaseDate: info.releaseDate
+    });
   }
+});
 
-  return { success: true };
-}
-
-/**
- * Launches the downloaded installer (or opens the release page if no file was
- * downloaded) and quits the app.
- * On Linux/AppImage: overwrites the running AppImage in-place and relaunches.
- * On Windows: runs the installer and quits.
- * On macOS: opens the DMG for manual installation.
- */
-function installGiteaUpdate() {
-  if (downloadedUpdatePath && fs.existsSync(downloadedUpdatePath)) {
-    if (process.platform === 'win32') {
-      exec(`"${downloadedUpdatePath}"`);
-      app.quit();
-    } else if (process.platform === 'linux') {
-      const currentAppImage = process.env.APPIMAGE;
-      if (currentAppImage) {
-        try {
-          fs.chmodSync(downloadedUpdatePath, 0o755);
-          fs.copyFileSync(downloadedUpdatePath, currentAppImage);
-          fs.unlinkSync(downloadedUpdatePath);
-          console.log('AppImage replaced, relaunching...');
-          app.relaunch({ execPath: currentAppImage });
-          app.quit();
-        } catch (err) {
-          console.error('Failed to replace AppImage in-place, opening file instead:', err);
-          shell.openPath(downloadedUpdatePath);
-          app.quit();
-        }
-      } else {
-        // Not running as AppImage (e.g. dev/unpacked), just open it
-        shell.openPath(downloadedUpdatePath);
-        app.quit();
-      }
-    } else {
-      // macOS: open the DMG for manual installation
-      shell.openPath(downloadedUpdatePath);
-      app.quit();
-    }
-  } else if (pendingUpdateInfo?.htmlUrl) {
-    shell.openExternal(pendingUpdateInfo.htmlUrl);
-    app.quit();
+autoUpdater.on('update-not-available', (info) => {
+  console.log('No update available. Current version:', info.version);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-not-available', { version: info.version });
   }
-}
+});
+
+autoUpdater.on('error', (err) => {
+  console.error('Update error:', err);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-error', { error: err.message });
+  }
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  console.log(`Download progress: ${progressObj.percent}%`);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-download-progress', {
+      percent: progressObj.percent,
+      transferred: progressObj.transferred,
+      total: progressObj.total
+    });
+  }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  console.log('Update downloaded:', info.version);
+  if (mainWindow) {
+    mainWindow.webContents.send('update-downloaded', {
+      version: info.version,
+      releaseNotes: info.releaseNotes
+    });
+  }
+});
 
 
 // Single instance lock
@@ -697,24 +535,20 @@ app.whenReady().then(() => {
     console.error('Failed to start API server:', err);
   });
   
-  // Check for updates (not in development mode)
+  // Check for updates on startup (not in development mode)
   if (!isDev) {
     // Check for updates on start (after 3 seconds)
-    setTimeout(async () => {
-      try {
-        await checkForGiteaUpdate();
-      } catch (err) {
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(err => {
         console.error('Failed to check for updates:', err);
-      }
+      });
     }, 3000);
 
     // Check for updates every 6 hours
-    setInterval(async () => {
-      try {
-        await checkForGiteaUpdate();
-      } catch (err) {
+    setInterval(() => {
+      autoUpdater.checkForUpdates().catch(err => {
         console.error('Failed to check for updates:', err);
-      }
+      });
     }, 6 * 60 * 60 * 1000);
   }
 });
@@ -934,7 +768,7 @@ ipcMain.handle('check-for-updates', async () => {
     return { success: false, error: 'Updates are not available in development mode' };
   }
   try {
-    const result = await checkForGiteaUpdate();
+    const result = await autoUpdater.checkForUpdates();
     return { success: true, data: result };
   } catch (error) {
     return { success: false, error: error.message };
@@ -946,8 +780,8 @@ ipcMain.handle('download-update', async () => {
     return { success: false, error: 'Updates are not available in development mode' };
   }
   try {
-    const result = await downloadGiteaUpdate();
-    return { success: true, data: result };
+    await autoUpdater.downloadUpdate();
+    return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
   }
@@ -957,7 +791,7 @@ ipcMain.handle('install-update', () => {
   if (isDev) {
     return { success: false, error: 'Updates are not available in development mode' };
   }
-  installGiteaUpdate();
+  autoUpdater.quitAndInstall();
   return { success: true };
 });
 
@@ -966,11 +800,9 @@ ipcMain.handle('download-and-install-update', async () => {
     return { success: false, error: 'Updates are not available in development mode' };
   }
   try {
-    const result = await downloadGiteaUpdate();
-    if (!result.opened) {
-      installGiteaUpdate();
-    }
-    return { success: true, data: result };
+    await autoUpdater.downloadUpdate();
+    autoUpdater.quitAndInstall();
+    return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
   }
