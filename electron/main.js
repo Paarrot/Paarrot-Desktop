@@ -956,6 +956,11 @@ ipcMain.handle('plugin:download', async (event, { pluginId, downloadUrl, name })
       return { success: false, error: 'Plugin already installed' };
     }
     
+    // Validate downloadUrl
+    if (!downloadUrl || typeof downloadUrl !== 'string' || downloadUrl.trim() === '') {
+      return { success: false, error: 'Plugin metadata missing downloadUrl field' };
+    }
+    
     // Download the zip file
     const tempZipPath = path.join(app.getPath('temp'), `${pluginId}.zip`);
     
@@ -986,12 +991,42 @@ ipcMain.handle('plugin:download', async (event, { pluginId, downloadUrl, name })
       });
     });
     
-    // Extract the zip file
-    const zip = new AdmZip(tempZipPath);
-    zip.extractAllTo(pluginDir, true);
+    // Extract the zip file to temp location first
+    const tempExtractDir = path.join(app.getPath('temp'), `${pluginId}-extract`);
+    if (fs.existsSync(tempExtractDir)) {
+      fs.rmSync(tempExtractDir, { recursive: true, force: true });
+    }
+    fs.mkdirSync(tempExtractDir, { recursive: true });
     
-    // Clean up temp file
+    const zip = new AdmZip(tempZipPath);
+    zip.extractAllTo(tempExtractDir, true);
+    
+    // Clean up temp zip
     fs.unlinkSync(tempZipPath);
+    
+    // GitHub archives extract to repo-name-branch/ folder, flatten it
+    const extractedContents = fs.readdirSync(tempExtractDir);
+    let sourceDir = tempExtractDir;
+    
+    // If single folder exists, move contents up one level
+    if (extractedContents.length === 1) {
+      const singleItem = path.join(tempExtractDir, extractedContents[0]);
+      if (fs.statSync(singleItem).isDirectory()) {
+        sourceDir = singleItem;
+      }
+    }
+    
+    // Move contents to final plugin directory
+    fs.mkdirSync(pluginDir, { recursive: true });
+    const files = fs.readdirSync(sourceDir);
+    for (const file of files) {
+      const srcPath = path.join(sourceDir, file);
+      const destPath = path.join(pluginDir, file);
+      fs.renameSync(srcPath, destPath);
+    }
+    
+    // Clean up temp extract dir
+    fs.rmSync(tempExtractDir, { recursive: true, force: true });
     
     // Store metadata
     const metadataPath = path.join(pluginDir, 'plugin-metadata.json');
