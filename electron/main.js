@@ -16,6 +16,11 @@ if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
+// Development mode detection - MUST be declared before any code that might use it
+const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
+const VITE_DEV_SERVER = 'http://localhost:38347';
+const PORT = 44548;
+
 // Handle Squirrel.Windows installation/update events
 if (process.platform === 'win32') {
   const handleSquirrelEvent = () => {
@@ -169,11 +174,6 @@ if (!gotTheLock) {
     }
   });
 }
-
-// Development mode detection
-const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
-const VITE_DEV_SERVER = 'http://localhost:38347';
-const PORT = 44548;
 
 // Helper to get correct icon path in dev vs packaged app
 function getIconPath(iconName) {
