@@ -78,17 +78,21 @@
   "win": {
     "target": [
       {
-        "target": "squirrel",
+        "target": "nsis",
         "arch": ["x64"]
       }
     ],
     "icon": "icons/icon.ico",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}"
   },
-  "squirrelWindows": {
-    "name": "Paarrot",
-    "loadingGif": "icons/icon.png",
-    "iconUrl": "https://raw.githubusercontent.com/Paarrot/Paarrot-Desktop/main/icons/icon.ico"
+  "nsis": {
+    "oneClick": true,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": false,
+    "deleteAppDataOnUninstall": false,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Paarrot"
   },
   "publish": [
     {
