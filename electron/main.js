@@ -84,6 +84,13 @@ let apiServer = null;
 // Allow audio playback without requiring a prior user gesture (needed for notification sounds)
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
+// Enable GPU acceleration
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('enable-webgl');
+app.commandLine.appendSwitch('enable-accelerated-2d-canvas');
+
 // Set app name for notifications and system tray
 app.setName('Paarrot');
 
