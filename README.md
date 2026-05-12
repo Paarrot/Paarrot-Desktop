@@ -22,7 +22,7 @@ To setup development locally run the following commands:
 * `cd cinny-desktop/cinny`
 * `npm ci`
 * `cd ..`
-* `npm ci`
+* `npm ci` 
 
 To build the app locally, run:
 * `npm run build`
