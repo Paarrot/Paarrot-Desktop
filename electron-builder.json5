@@ -92,8 +92,10 @@
     "deleteAppDataOnUninstall": false,
     "createDesktopShortcut": true,
     "createStartMenuShortcut": true,
-    "shortcutName": "Paarrot"
+    "shortcutName": "Paarrot",
+    "differentialPackage": false
   },
+  "compression": "normal",
   "publish": [
     {
       "provider": "github",

@@ -83,11 +83,11 @@ jobs:
           node-version: '20'
       
       - name: Install dependencies (root)
-        run: npm install --prefer-offline
+        run: npm ci --prefer-offline
       
       - name: Install dependencies (cinny)
         working-directory: ./cinny
-        run: npm install --prefer-offline
+        run: npm ci --prefer-offline
       
       - name: Clean previous builds
         shell: powershell
