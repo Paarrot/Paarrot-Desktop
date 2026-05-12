@@ -100,38 +100,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GHTOKEN }}
       
-      - name: Upload Squirrel Setup (x64)
+      - name: Upload NSIS Installer (x64)
         uses: actions/upload-artifact@v3
         with:
           name: Paarrot-Setup-x64.exe
-          path: dist-electron/squirrel-windows/Paarrot-*-win-x64.exe
+          path: dist-electron/Paarrot-*-win-x64.exe
+      
+      - name: Upload latest.yml
+        uses: actions/upload-artifact@v3
+        with:
+          name: latest.yml
+          path: dist-electron/latest.yml
       
       - name: List build output
         shell: powershell
         run: |
           Get-ChildItem -Path dist-electron -Recurse | Select-Object FullName
-      
-      - name: Copy RELEASES file for upload
-        shell: powershell
-        run: |
-          if (Test-Path "dist-electron/squirrel-windows/RELEASES") {
-            Copy-Item "dist-electron/squirrel-windows/RELEASES" -Destination "dist-electron/RELEASES"
-          } else {
-            Write-Error "RELEASES file not found for x64"
-            exit 1
-          }
-      
-      - name: Upload Squirrel RELEASES
-        uses: actions/upload-artifact@v3
-        with:
-          name: RELEASES
-          path: dist-electron/RELEASES
-      
-      - name: Upload Squirrel nupkg (x64)
-        uses: actions/upload-artifact@v3
-        with:
-          name: Paarrot-x64.nupkg
-          path: dist-electron/squirrel-windows/*.nupkg
 
   build-linux:
     runs-on: ubuntu-latest
@@ -238,7 +222,7 @@ jobs:
       - name: Prepare release files
         run: |
           mkdir -p release-files
-          find artifacts -type f \( -name "*.exe" -o -name "*.AppImage" -o -name "*.nupkg" -o -name "RELEASES*" -o -name "*.yml" \) -exec cp {} release-files/ \;
+          find artifacts -type f \( -name "*.exe" -o -name "*.AppImage" -o -name "*.yml" \) -exec cp {} release-files/ \;
           ls -la release-files/
       
       - name: Create or Update Release
