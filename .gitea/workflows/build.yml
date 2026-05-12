@@ -234,6 +234,28 @@ jobs:
           API_BASE="http://synbox.ruv.wtf:8418/api/v1"
           REPO="litruv/cinny-desktop"
           
+          # Delete old releases (keep only current)
+          echo "Cleaning up old releases..."
+          OLD_RELEASES=$(curl -s -H "Authorization: token ${GITEA_TOKEN}" \
+            "${API_BASE}/repos/${REPO}/releases" | jq -r '.[] | select(.tag_name != "'${TAG_NAME}'") | .id')
+          
+          for OLD_ID in $OLD_RELEASES; do
+            echo "Deleting old release ${OLD_ID}..."
+            OLD_TAG=$(curl -s -H "Authorization: token ${GITEA_TOKEN}" \
+              "${API_BASE}/repos/${REPO}/releases/${OLD_ID}" | jq -r '.tag_name')
+            
+            # Delete release
+            curl -s -X DELETE -H "Authorization: token ${GITEA_TOKEN}" \
+              "${API_BASE}/repos/${REPO}/releases/${OLD_ID}"
+            
+            # Delete tag
+            if [ -n "$OLD_TAG" ]; then
+              echo "Deleting old tag ${OLD_TAG}..."
+              curl -s -X DELETE -H "Authorization: token ${GITEA_TOKEN}" \
+                "${API_BASE}/repos/${REPO}/tags/${OLD_TAG}"
+            fi
+          done
+          
           # Check if release exists
           RELEASE_ID=$(curl -s -H "Authorization: token ${GITEA_TOKEN}" \
             "${API_BASE}/repos/${REPO}/releases/tags/${TAG_NAME}" | jq -r '.id // empty')
@@ -281,6 +303,28 @@ jobs:
           VERSION="${{ steps.version.outputs.VERSION }}"
           TAG_NAME="v${VERSION}"
           GITHUB_REPO="Paarrot/Paarrot-Desktop"
+          
+          # Delete old GitHub releases (keep only current)
+          echo "Cleaning up old GitHub releases..."
+          OLD_RELEASES=$(curl -s -H "Authorization: token ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPO}/releases" | jq -r '.[] | select(.tag_name != "'${TAG_NAME}'") | .id')
+          
+          for OLD_ID in $OLD_RELEASES; do
+            echo "Deleting old GitHub release ${OLD_ID}..."
+            OLD_TAG=$(curl -s -H "Authorization: token ${GH_TOKEN}" \
+              "https://api.github.com/repos/${GITHUB_REPO}/releases/${OLD_ID}" | jq -r '.tag_name')
+            
+            # Delete release
+            curl -s -X DELETE -H "Authorization: token ${GH_TOKEN}" \
+              "https://api.github.com/repos/${GITHUB_REPO}/releases/${OLD_ID}"
+            
+            # Delete tag
+            if [ -n "$OLD_TAG" ]; then
+              echo "Deleting old GitHub tag ${OLD_TAG}..."
+              curl -s -X DELETE -H "Authorization: token ${GH_TOKEN}" \
+                "https://api.github.com/repos/${GITHUB_REPO}/git/refs/tags/${OLD_TAG}"
+            fi
+          done
           
           # Check if release exists on GitHub
           RELEASE_ID=$(curl -s -H "Authorization: token ${GH_TOKEN}" \
