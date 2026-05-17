@@ -53,7 +53,23 @@ jobs:
           git config user.email "actions@github.com"
           git add package.json
           git commit -m "chore: bump version to ${{ steps.bump.outputs.VERSION }} [skip ci]"
-          git push
+          for attempt in 1 2 3; do
+            git fetch origin main
+            git rebase origin/main || {
+              git rebase --abort || true
+              echo "Failed to rebase version bump onto latest main"
+              exit 1
+            }
+
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+
+            echo "Push rejected on attempt ${attempt}, retrying against latest main"
+          done
+
+          echo "Failed to push version bump after 3 attempts"
+          exit 1
 
   build-windows:
     runs-on: windows
