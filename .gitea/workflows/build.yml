@@ -120,7 +120,19 @@ jobs:
       - name: Checkout submodules manually
         shell: powershell
         run: |
-          git submodule update --init --recursive
+          git submodule sync --recursive
+
+          if (git submodule update --init --recursive) {
+            Write-Host "Submodules checked out at pinned commits."
+            exit 0
+          }
+
+          Write-Warning "Pinned submodule commit is unavailable on remote. Falling back to remote submodule HEAD."
+          git submodule deinit -f --all
+          git submodule update --init --recursive --remote
+
+          Write-Host "Resolved submodule commit:"
+          git -C cinny rev-parse HEAD
       
       - name: Pull latest (after version bump)
         if: github.ref == 'refs/heads/main'
@@ -176,8 +188,25 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
           ref: ${{ github.ref_name }}
+
+      - name: Checkout submodules manually
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+
+          if git submodule update --init --recursive; then
+            echo "Submodules checked out at pinned commits."
+            exit 0
+          fi
+
+          echo "Pinned submodule commit is unavailable on remote. Falling back to remote submodule HEAD."
+          git submodule deinit -f --all
+          git submodule update --init --recursive --remote
+
+          echo "Resolved submodule commit:"
+          git -C cinny rev-parse HEAD
       
       - name: Pull latest (after version bump)
         if: github.ref == 'refs/heads/main'
