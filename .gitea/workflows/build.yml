@@ -11,10 +11,9 @@ on:
 jobs:
   increment-version:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && !contains(github.event.head_commit.message, '[skip ci]')
     outputs:
-      version: ${{ steps.bump.outputs.VERSION }}
-      should_build: ${{ steps.bump.outputs.SHOULD_BUILD }}
+      version: ${{ steps.finalize.outputs.VERSION }}
+      should_build: ${{ steps.decide.outputs.SHOULD_BUILD }}
     
     steps:
       - name: Checkout repository
@@ -22,9 +21,35 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Decide version behavior
+        id: decide
+        run: |
+          CURRENT=$(grep -Po '"version":\s*"\K[^"]+' package.json | head -1)
+          COMMIT_MSG="${{ github.event.head_commit.message || '' }}"
+
+          SHOULD_BUMP=false
+          SHOULD_BUILD=true
+
+          if [ "${{ github.ref }}" = "refs/heads/main" ] && ! echo "$COMMIT_MSG" | grep -qi '\[skip ci\]'; then
+            SHOULD_BUMP=true
+          fi
+
+          if echo "$COMMIT_MSG" | grep -qi '\[skip ci\]'; then
+            SHOULD_BUILD=false
+          fi
+
+          echo "CURRENT_VERSION=$CURRENT" >> $GITHUB_OUTPUT
+          echo "SHOULD_BUMP=$SHOULD_BUMP" >> $GITHUB_OUTPUT
+          echo "SHOULD_BUILD=$SHOULD_BUILD" >> $GITHUB_OUTPUT
+
+          echo "Current version: $CURRENT"
+          echo "Should bump: $SHOULD_BUMP"
+          echo "Should build: $SHOULD_BUILD"
       
       - name: Bump patch version
         id: bump
+        if: ${{ steps.decide.outputs.SHOULD_BUMP == 'true' }}
         run: |
           # Get current version from package.json
           CURRENT=$(grep -Po '"version":\s*"\K[^"]+' package.json | head -1)
@@ -45,9 +70,9 @@ jobs:
           grep '"version"' package.json | head -1
           
           echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "SHOULD_BUILD=true" >> $GITHUB_OUTPUT
       
       - name: Commit and push version bump
+        if: ${{ steps.decide.outputs.SHOULD_BUMP == 'true' }}
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
@@ -70,6 +95,15 @@ jobs:
 
           echo "Failed to push version bump after 3 attempts"
           exit 1
+
+      - name: Finalize version output
+        id: finalize
+        run: |
+          if [ -n "${{ steps.bump.outputs.VERSION }}" ]; then
+            echo "VERSION=${{ steps.bump.outputs.VERSION }}" >> $GITHUB_OUTPUT
+          else
+            echo "VERSION=${{ steps.decide.outputs.CURRENT_VERSION }}" >> $GITHUB_OUTPUT
+          fi
 
   build-windows:
     runs-on: windows
