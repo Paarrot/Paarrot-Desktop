@@ -39,7 +39,7 @@
   "protocols": [
     {
       "name": "Paarrot URL",
-      "schemes": ["paarrot", "element"]
+      "schemes": ["paarrot"]
     }
   ],
   "linux": {
@@ -57,7 +57,7 @@
         "Name": "Paarrot",
         "GenericName": "Matrix Client",
         "Comment": "A Matrix client built with Cinny",
-        "MimeType": "x-scheme-handler/paarrot;x-scheme-handler/element;",
+        "MimeType": "x-scheme-handler/paarrot;",
         "Categories": "Network;InstantMessaging;",
         "Keywords": "matrix;chat;messaging;",
         "StartupWMClass": "paarrot"
