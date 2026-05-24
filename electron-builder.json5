@@ -36,6 +36,12 @@
       "filter": ["**/*"]
     }
   ],
+  "protocols": [
+    {
+      "name": "Element URL",
+      "schemes": ["element"]
+    }
+  ],
   "linux": {
     "target": [
       {
@@ -51,6 +57,7 @@
         "Name": "Paarrot",
         "GenericName": "Matrix Client",
         "Comment": "A Matrix client built with Cinny",
+        "MimeType": "x-scheme-handler/element;",
         "Categories": "Network;InstantMessaging;",
         "Keywords": "matrix;chat;messaging;",
         "StartupWMClass": "paarrot"

@@ -18,11 +18,13 @@ const PORT = 44548;
 
 const execAsync = promisify(exec);
 const store = new Store();
+const ELEMENT_PROTOCOL = 'element';
 
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
 let apiServer = null;
+let pendingDeepLink = null;
 
 // Allow audio playback without requiring a prior user gesture (needed for notification sounds)
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -115,14 +117,114 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on('second-instance', (event, argv) => {
     // Someone tried to run a second instance, focus our window
+    const deepLink = extractDeepLinkFromArgv(argv);
+    if (deepLink) {
+      pendingDeepLink = deepLink;
+    }
+
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
+
+      if (pendingDeepLink) {
+        applyDeepLink(pendingDeepLink);
+      }
     }
   });
+}
+
+pendingDeepLink = extractDeepLinkFromArgv(process.argv);
+
+/**
+ * Extracts an element:// deep link URL from argv.
+ * @param {string[]} argv - Process argument vector.
+ * @returns {string|null} The deep link URL or null.
+ */
+function extractDeepLinkFromArgv(argv) {
+  if (!Array.isArray(argv)) {
+    return null;
+  }
+
+  const match = argv.find((arg) => typeof arg === 'string' && arg.startsWith(`${ELEMENT_PROTOCOL}://`));
+  return match || null;
+}
+
+/**
+ * Converts an element:// deep link into an in-app hash route.
+ * @param {string} deepLink - The incoming protocol URL.
+ * @returns {string|null} Hash route value without leading #.
+ */
+function deepLinkToHashRoute(deepLink) {
+  if (!deepLink || !deepLink.startsWith(`${ELEMENT_PROTOCOL}://`)) {
+    return null;
+  }
+
+  const hashIndex = deepLink.indexOf('#');
+  if (hashIndex === -1) {
+    return null;
+  }
+
+  const hashValue = deepLink.slice(hashIndex + 1);
+  if (!hashValue) {
+    return null;
+  }
+
+  return hashValue.startsWith('/') ? hashValue : `/${hashValue}`;
+}
+
+/**
+ * Applies a deep link to the current window and brings the app to foreground.
+ * @param {string} deepLink - The incoming protocol URL.
+ */
+function applyDeepLink(deepLink) {
+  if (!mainWindow) {
+    pendingDeepLink = deepLink;
+    return;
+  }
+
+  const hashRoute = deepLinkToHashRoute(deepLink);
+  if (!hashRoute) {
+    return;
+  }
+
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+
+  mainWindow.show();
+  mainWindow.focus();
+
+  if (isDev) {
+    mainWindow.loadURL(`${VITE_DEV_SERVER}/#${hashRoute}`).catch((error) => {
+      console.error('[Protocol] Failed to load deep link route in dev:', error);
+    });
+  } else {
+    mainWindow.loadFile(path.join(__dirname, '../cinny/dist/index.html'), { hash: hashRoute }).catch((error) => {
+      console.error('[Protocol] Failed to load deep link route in production:', error);
+    });
+  }
+
+  pendingDeepLink = null;
+}
+
+/**
+ * Registers the app as handler for element:// links.
+ */
+function registerElementProtocol() {
+  const before = app.isDefaultProtocolClient(ELEMENT_PROTOCOL);
+
+  let registered = false;
+  if (process.defaultApp) {
+    registered = app.setAsDefaultProtocolClient(ELEMENT_PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+  } else {
+    registered = app.setAsDefaultProtocolClient(ELEMENT_PROTOCOL);
+  }
+
+  const after = app.isDefaultProtocolClient(ELEMENT_PROTOCOL);
+  console.log(`[Protocol] element:// before=${before} registerCall=${registered} after=${after}`);
 }
 
 // Helper to get correct icon path in dev vs packaged app
@@ -490,8 +592,14 @@ function createTray() {
 
 // App lifecycle
 app.whenReady().then(() => {
+  registerElementProtocol();
+
   createWindow();
   createTray();
+
+  if (pendingDeepLink) {
+    applyDeepLink(pendingDeepLink);
+  }
   
   // Start API server
   apiServer = new PaarrotAPIServer(mainWindow);
@@ -515,6 +623,11 @@ app.whenReady().then(() => {
       });
     }, 6 * 60 * 60 * 1000);
   }
+});
+
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  applyDeepLink(url);
 });
 
 app.on('window-all-closed', () => {
