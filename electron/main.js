@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, clipboard, session, desktopCapturer } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const { promisify } = require('util');
 const Store = require('electron-store');
 const open = require('open');
@@ -17,14 +17,26 @@ const VITE_DEV_SERVER = 'http://localhost:38347';
 const PORT = 44548;
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const store = new Store();
+const PAARROT_PROTOCOL = 'paarrot';
 const ELEMENT_PROTOCOL = 'element';
+const PRIMARY_PROTOCOL = PAARROT_PROTOCOL;
+const SUPPORTED_PROTOCOLS = [PAARROT_PROTOCOL, ELEMENT_PROTOCOL];
 
 let mainWindow = null;
 let tray = null;
 let isQuitting = false;
 let apiServer = null;
 let pendingDeepLink = null;
+let protocolRegistrationState = Object.fromEntries(
+  SUPPORTED_PROTOCOLS.map((scheme) => [scheme, {
+    before: false,
+    registerCall: false,
+    after: false,
+    error: null,
+  }])
+);
 
 // Allow audio playback without requiring a prior user gesture (needed for notification sounds)
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
@@ -139,7 +151,7 @@ if (!gotTheLock) {
 pendingDeepLink = extractDeepLinkFromArgv(process.argv);
 
 /**
- * Extracts an element:// deep link URL from argv.
+ * Extracts a supported deep link URL from argv.
  * @param {string[]} argv - Process argument vector.
  * @returns {string|null} The deep link URL or null.
  */
@@ -148,17 +160,31 @@ function extractDeepLinkFromArgv(argv) {
     return null;
   }
 
-  const match = argv.find((arg) => typeof arg === 'string' && arg.startsWith(`${ELEMENT_PROTOCOL}://`));
+  const match = argv.find((arg) => {
+    if (typeof arg !== 'string') {
+      return false;
+    }
+
+    const lowerArg = arg.toLowerCase();
+    return SUPPORTED_PROTOCOLS.some((scheme) => lowerArg.startsWith(`${scheme}://`));
+  });
+
   return match || null;
 }
 
 /**
- * Converts an element:// deep link into an in-app hash route.
+ * Converts a supported deep link into an in-app hash route.
  * @param {string} deepLink - The incoming protocol URL.
  * @returns {string|null} Hash route value without leading #.
  */
 function deepLinkToHashRoute(deepLink) {
-  if (!deepLink || !deepLink.startsWith(`${ELEMENT_PROTOCOL}://`)) {
+  if (!deepLink) {
+    return null;
+  }
+
+  const lowerDeepLink = deepLink.toLowerCase();
+  const isSupported = SUPPORTED_PROTOCOLS.some((scheme) => lowerDeepLink.startsWith(`${scheme}://`));
+  if (!isSupported) {
     return null;
   }
 
@@ -211,20 +237,228 @@ function applyDeepLink(deepLink) {
 }
 
 /**
- * Registers the app as handler for element:// links.
+ * Registers the app as handler for a URL scheme.
+ * @param {string} scheme - URL protocol scheme name.
+ * @returns {{ before: boolean; registerCall: boolean; after: boolean; error: string | null }}
  */
-function registerElementProtocol() {
-  const before = app.isDefaultProtocolClient(ELEMENT_PROTOCOL);
-
+function registerProtocolScheme(scheme) {
+  const before = app.isDefaultProtocolClient(scheme);
   let registered = false;
-  if (process.defaultApp) {
-    registered = app.setAsDefaultProtocolClient(ELEMENT_PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
-  } else {
-    registered = app.setAsDefaultProtocolClient(ELEMENT_PROTOCOL);
+  let error = null;
+
+  try {
+    if (process.defaultApp) {
+      registered = app.setAsDefaultProtocolClient(scheme, process.execPath, [path.resolve(process.argv[1])]);
+    } else {
+      registered = app.setAsDefaultProtocolClient(scheme);
+    }
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
   }
 
-  const after = app.isDefaultProtocolClient(ELEMENT_PROTOCOL);
-  console.log(`[Protocol] element:// before=${before} registerCall=${registered} after=${after}`);
+  const after = app.isDefaultProtocolClient(scheme);
+  return {
+    before,
+    registerCall: registered,
+    after,
+    error,
+  };
+}
+
+/**
+ * Registers all supported URL protocol schemes.
+ */
+function registerAppProtocols() {
+  SUPPORTED_PROTOCOLS.forEach((scheme) => {
+    const schemeState = registerProtocolScheme(scheme);
+    protocolRegistrationState[scheme] = schemeState;
+    console.log(`[Protocol] ${scheme}:// before=${schemeState.before} registerCall=${schemeState.registerCall} after=${schemeState.after}${schemeState.error ? ` error=${schemeState.error}` : ''}`);
+  });
+}
+
+/**
+ * Reads a named Windows registry value.
+ * @param {string} keyPath - Registry key path.
+ * @param {string} valueName - Registry value name.
+ * @returns {Promise<string|null>} Registry value content.
+ */
+async function queryWindowsRegistryValue(keyPath, valueName) {
+  try {
+    const { stdout } = await execAsync(`reg query "${keyPath}" /v "${valueName}"`);
+    const lines = stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const valueLine = lines.find((line) => line.toLowerCase().startsWith(valueName.toLowerCase()));
+    if (!valueLine) {
+      return null;
+    }
+
+    const parsed = valueLine.split(/\s{2,}/).filter(Boolean);
+    return parsed.length >= 3 ? parsed.slice(2).join(' ') : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reads the default Windows registry value.
+ * @param {string} keyPath - Registry key path.
+ * @returns {Promise<string|null>} Default value content.
+ */
+async function queryWindowsRegistryDefault(keyPath) {
+  try {
+    const { stdout } = await execAsync(`reg query "${keyPath}" /ve`);
+    const lines = stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const valueLine = lines.find((line) => line.startsWith('(Default)'));
+    if (!valueLine) {
+      return null;
+    }
+
+    const parsed = valueLine.split(/\s{2,}/).filter(Boolean);
+    return parsed.length >= 3 ? parsed.slice(2).join(' ') : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Provides Windows-specific protocol association diagnostics for one scheme.
+ * @param {string} scheme - URL protocol scheme.
+ * @returns {Promise<{userChoiceProgId: string | null; userChoiceCommand: string | null; hkcuCommand: string | null; hklmCommand: string | null}>}
+ */
+async function getWindowsProtocolDiagnosticsForScheme(scheme) {
+  const userChoiceProgId = await queryWindowsRegistryValue(
+    `HKCU\\Software\\Microsoft\\Windows\\Shell\\Associations\\UrlAssociations\\${scheme}\\UserChoice`,
+    'ProgId'
+  );
+
+  let userChoiceCommand = null;
+  if (userChoiceProgId) {
+    userChoiceCommand =
+      (await queryWindowsRegistryDefault(`HKCU\\Software\\Classes\\${userChoiceProgId}\\shell\\open\\command`)) ||
+      (await queryWindowsRegistryDefault(`HKLM\\Software\\Classes\\${userChoiceProgId}\\shell\\open\\command`));
+  }
+
+  const hkcuCommand = await queryWindowsRegistryDefault(`HKCU\\Software\\Classes\\${scheme}\\shell\\open\\command`);
+  const hklmCommand = await queryWindowsRegistryDefault(`HKLM\\Software\\Classes\\${scheme}\\shell\\open\\command`);
+
+  return {
+    userChoiceProgId,
+    userChoiceCommand,
+    hkcuCommand,
+    hklmCommand,
+  };
+}
+
+/**
+ * Ensures Windows has user-level URL protocol class entries for a scheme
+ * so the scheme appears in Default Apps link associations.
+ * @param {string} scheme - URL protocol scheme.
+ * @returns {Promise<void>}
+ */
+async function ensureWindowsRegistryEntriesForScheme(scheme) {
+  if (process.platform !== 'win32') {
+    return;
+  }
+
+  const openCommand = process.defaultApp && process.argv[1]
+    ? `"${process.execPath}" "${path.resolve(process.argv[1])}" "%1"`
+    : `"${process.execPath}" "%1"`;
+  const iconValue = `"${process.execPath}",0`;
+  const protocolDisplayName = `URL:${scheme} Protocol`;
+
+  await execFileAsync('reg.exe', [
+    'add',
+    `HKCU\\Software\\Classes\\${scheme}`,
+    '/ve',
+    '/t',
+    'REG_SZ',
+    '/d',
+    protocolDisplayName,
+    '/f',
+  ]);
+
+  await execFileAsync('reg.exe', [
+    'add',
+    `HKCU\\Software\\Classes\\${scheme}`,
+    '/v',
+    'URL Protocol',
+    '/t',
+    'REG_SZ',
+    '/d',
+    '',
+    '/f',
+  ]);
+
+  await execFileAsync('reg.exe', [
+    'add',
+    `HKCU\\Software\\Classes\\${scheme}\\DefaultIcon`,
+    '/ve',
+    '/t',
+    'REG_SZ',
+    '/d',
+    iconValue,
+    '/f',
+  ]);
+
+  await execFileAsync('reg.exe', [
+    'add',
+    `HKCU\\Software\\Classes\\${scheme}\\shell\\open\\command`,
+    '/ve',
+    '/t',
+    'REG_SZ',
+    '/d',
+    openCommand,
+    '/f',
+  ]);
+}
+
+/**
+ * Provides Windows diagnostics for all supported schemes.
+ * @returns {Promise<null|Record<string, {userChoiceProgId: string | null; userChoiceCommand: string | null; hkcuCommand: string | null; hklmCommand: string | null}>>}
+ */
+async function getWindowsProtocolDiagnostics() {
+  if (process.platform !== 'win32') {
+    return null;
+  }
+
+  const diagnostics = {};
+  for (const scheme of SUPPORTED_PROTOCOLS) {
+    diagnostics[scheme] = await getWindowsProtocolDiagnosticsForScheme(scheme);
+  }
+
+  return diagnostics;
+}
+
+/**
+ * Returns renderer-friendly protocol diagnostics payload.
+ * @returns {Promise<{ success: boolean; data: { platform: string; primaryScheme: string; schemes: Record<string, {isDefault: boolean; before: boolean; registerCall: boolean; error: string | null}>; windows: null | Record<string, {userChoiceProgId: string | null; userChoiceCommand: string | null; hkcuCommand: string | null; hklmCommand: string | null}> } }>}
+ */
+async function getProtocolStatusPayload() {
+  const schemes = {};
+  for (const scheme of SUPPORTED_PROTOCOLS) {
+    const state = protocolRegistrationState[scheme] || {
+      before: false,
+      registerCall: false,
+      after: false,
+      error: null,
+    };
+
+    schemes[scheme] = {
+      isDefault: app.isDefaultProtocolClient(scheme),
+      before: state.before,
+      registerCall: state.registerCall,
+      error: state.error,
+    };
+  }
+
+  return {
+    success: true,
+    data: {
+      platform: process.platform,
+      primaryScheme: PRIMARY_PROTOCOL,
+      schemes,
+      windows: await getWindowsProtocolDiagnostics(),
+    },
+  };
 }
 
 // Helper to get correct icon path in dev vs packaged app
@@ -592,7 +826,7 @@ function createTray() {
 
 // App lifecycle
 app.whenReady().then(() => {
-  registerElementProtocol();
+  registerAppProtocols();
 
   createWindow();
   createTray();
@@ -702,6 +936,52 @@ ipcMain.handle('window:flash-frame', (event, flash = true) => {
 
 ipcMain.handle('window:is-maximized', () => {
   return mainWindow ? mainWindow.isMaximized() : false;
+});
+
+/**
+ * Returns protocol registration health for the renderer settings page.
+ * @returns {Promise<{ success: boolean; data: { platform: string; primaryScheme: string; schemes: Record<string, {isDefault: boolean; before: boolean; registerCall: boolean; error: string | null}>; windows: null | Record<string, {userChoiceProgId: string | null; userChoiceCommand: string | null; hkcuCommand: string | null; hklmCommand: string | null}> } }>}
+ */
+ipcMain.handle('protocol:get-status', () => {
+  return getProtocolStatusPayload();
+});
+
+/**
+ * Re-runs protocol registration and opens OS default-apps page when manual selection is required.
+ * @returns {Promise<{ success: boolean; data: { openedSettings: boolean; platform: string; primaryScheme: string; schemes: Record<string, {isDefault: boolean; before: boolean; registerCall: boolean; error: string | null}>; windows: null | Record<string, {userChoiceProgId: string | null; userChoiceCommand: string | null; hkcuCommand: string | null; hklmCommand: string | null}> } }>}
+ */
+ipcMain.handle('protocol:repair', async () => {
+  if (process.platform === 'win32') {
+    for (const scheme of SUPPORTED_PROTOCOLS) {
+      try {
+        await ensureWindowsRegistryEntriesForScheme(scheme);
+      } catch (error) {
+        console.warn(`[Protocol] Failed to write Windows URL protocol registry entries for ${scheme}:`, error);
+      }
+    }
+  }
+
+  registerAppProtocols();
+
+  let openedSettings = false;
+  const isDefault = app.isDefaultProtocolClient(PRIMARY_PROTOCOL);
+  if (process.platform === 'win32' && !isDefault) {
+    try {
+      await shell.openExternal('ms-settings:defaultapps');
+      openedSettings = true;
+    } catch (error) {
+      console.warn('[Protocol] Failed to open Windows default apps settings:', error);
+    }
+  }
+
+  const status = await getProtocolStatusPayload();
+  return {
+    success: true,
+    data: {
+      openedSettings,
+      ...status.data,
+    },
+  };
 });
 
 ipcMain.handle('window:start-drag', () => {

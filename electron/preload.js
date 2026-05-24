@@ -18,7 +18,8 @@ const commandMap = {
   'check_for_updates': 'check-for-updates',
   'download_update': 'download-update',
   'install_update': 'install-update',
-  'get_desktop_sources': 'get-desktop-sources'
+  'get_desktop_sources': 'get-desktop-sources',
+  'get_protocol_status': 'protocol:get-status'
 };
 
 // Shared invoke function for legacy API compatibility
@@ -176,6 +177,12 @@ contextBridge.exposeInMainWorld('electron', {
     list: () => ipcRenderer.invoke('plugin:list'),
     uninstall: (pluginId) => ipcRenderer.invoke('plugin:uninstall', pluginId),
     readPluginCode: (pluginId) => ipcRenderer.invoke('plugin:read-code', pluginId)
+  },
+
+  // Desktop protocol diagnostics
+  protocol: {
+    getStatus: () => ipcRenderer.invoke('protocol:get-status'),
+    repair: () => ipcRenderer.invoke('protocol:repair')
   }
 });
 
