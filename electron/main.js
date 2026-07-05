@@ -758,20 +758,28 @@ function createWindow() {
     return { action: 'allow' };
   });
 
-  // Navigation handler - open external links in browser
+  // Navigation handler - open external links in browser.
+  // Same-host navigations (e.g. Vite HMR full reload) must stay in-app;
+  // a hardcoded origin list breaks when the dev server port changes.
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    const allowedOrigins = [
-      'http://localhost:8080',
-      'http://localhost:44548',
-      'http://127.0.0.1:8080',
-      'http://127.0.0.1:44548'
-    ];
-    
-    const isAllowed = allowedOrigins.some(origin => url.startsWith(origin)) ||
-                      url.startsWith('blob:') ||
-                      url.startsWith('data:');
-    
-    if (!isAllowed && (url.startsWith('http://') || url.startsWith('https://'))) {
+    if (url.startsWith('blob:') || url.startsWith('data:')) {
+      return;
+    }
+
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      return;
+    }
+
+    try {
+      const requestedHost = new URL(url).host;
+      const currentUrl = mainWindow.webContents.getURL();
+      const currentHost = currentUrl ? new URL(currentUrl).host : '';
+
+      if (requestedHost && requestedHost !== currentHost) {
+        event.preventDefault();
+        shell.openExternal(url);
+      }
+    } catch {
       event.preventDefault();
       shell.openExternal(url);
     }
