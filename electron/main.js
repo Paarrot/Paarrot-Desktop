@@ -3,8 +3,10 @@ const path = require('path');
 const fs = require('fs');
 const { exec, execFile, execFileSync } = require('child_process');
 const { promisify } = require('util');
-const Store = require('electron-store');
-const open = require('open');
+const Store = require('electron-store').default;
+const openPkg = require('open');
+const open = openPkg.default;
+const openApps = openPkg.apps;
 const PaarrotAPIServer = require('./api-server');
 const https = require('https');
 const http = require('http');
@@ -14,7 +16,90 @@ const { autoUpdater } = require('electron-updater');
 // Development mode detection - MUST be declared before any code that might use it
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const VITE_DEV_SERVER = 'http://localhost:38347';
+const VITE_DEV_PORT = '38347';
 const PORT = 44548;
+
+function isLoopbackHost(hostname) {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+}
+
+/**
+ * Open http(s) links in a real browser.
+ * On Linux, Electron's shell.openExternal / xdg-open often hit xdg-desktop-portal
+ * which can hand https:// to Discover instead of Firefox. Always launch a browser
+ * binary first; only fall back to the portal as a last resort.
+ */
+async function openExternalUrl(url) {
+  if (!url || (!url.startsWith('http://') && !url.startsWith('https://'))) {
+    await shell.openExternal(url);
+    return;
+  }
+
+  if (process.platform === 'linux') {
+    const browserCandidates = [
+      openApps?.browser,
+      openApps?.firefox,
+      openApps?.chrome,
+      openApps?.edge,
+      openApps?.brave,
+      'firefox',
+      'firefox-esr',
+      'google-chrome',
+      'google-chrome-stable',
+      'chromium',
+      'chromium-browser',
+      'brave-browser',
+      'microsoft-edge',
+      'microsoft-edge-stable',
+    ].filter(Boolean);
+
+    let lastError;
+    for (const name of browserCandidates) {
+      try {
+        await open(url, { app: { name } });
+        return;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    console.warn('[openExternalUrl] Browser candidates failed, falling back to shell.openExternal', lastError);
+    await shell.openExternal(url);
+    return;
+  }
+
+  try {
+    await open(url);
+  } catch (err) {
+    console.warn('[openExternalUrl] open() failed, falling back to shell.openExternal', err);
+    await shell.openExternal(url);
+  }
+}
+
+/** Keep Vite HMR / same-origin navigations inside Electron; only true externals go to the OS browser. */
+function isAppOwnedUrl(targetUrl, currentUrl) {
+  try {
+    const next = new URL(targetUrl);
+    if (currentUrl) {
+      const current = new URL(currentUrl);
+      if (current.origin === next.origin) return true;
+      // localhost ↔ 127.0.0.1 on the same Vite port after a full reload
+      if (
+        isDev &&
+        isLoopbackHost(current.hostname) &&
+        isLoopbackHost(next.hostname) &&
+        current.port === next.port
+      ) {
+        return true;
+      }
+    }
+    if (isDev && isLoopbackHost(next.hostname) && next.port === VITE_DEV_PORT) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
 
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
@@ -733,15 +818,10 @@ function createWindow() {
     mainWindow = null;
   });
 
-  // Open external links in default browser
-  mainWindow.webContents.setWindowOpenHandler(({ url, features }) => {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      shell.openExternal(url);
-      return { action: 'deny' };
-    }
-    // Allow blank windows for screen share pop-outs with custom features
+  // Open external links in default browser (keep same-origin / Vite in Electron)
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url === '' || url === 'about:blank') {
-      return { 
+      return {
         action: 'allow',
         overrideBrowserWindowOptions: {
           frame: false,
@@ -751,16 +831,24 @@ function createWindow() {
             contextIsolation: true,
             nodeIntegration: false,
             backgroundThrottling: false,
-          }
-        }
+          },
+        },
       };
+    }
+
+    if (isAppOwnedUrl(url, mainWindow.webContents.getURL())) {
+      return { action: 'allow' };
+    }
+
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      openExternalUrl(url);
+      return { action: 'deny' };
     }
     return { action: 'allow' };
   });
 
   // Navigation handler - open external links in browser.
-  // Same-host navigations (e.g. Vite HMR full reload) must stay in-app;
-  // a hardcoded origin list breaks when the dev server port changes.
+  // Same-origin / local Vite navigations (HMR full reload) must stay in-app.
   mainWindow.webContents.on('will-navigate', (event, url) => {
     if (url.startsWith('blob:') || url.startsWith('data:')) {
       return;
@@ -770,19 +858,12 @@ function createWindow() {
       return;
     }
 
-    try {
-      const requestedHost = new URL(url).host;
-      const currentUrl = mainWindow.webContents.getURL();
-      const currentHost = currentUrl ? new URL(currentUrl).host : '';
-
-      if (requestedHost && requestedHost !== currentHost) {
-        event.preventDefault();
-        shell.openExternal(url);
-      }
-    } catch {
-      event.preventDefault();
-      shell.openExternal(url);
+    if (isAppOwnedUrl(url, mainWindow.webContents.getURL())) {
+      return;
     }
+
+    event.preventDefault();
+    openExternalUrl(url);
   });
 
   return mainWindow;
@@ -991,7 +1072,7 @@ ipcMain.handle('plugin:app|version', () => {
 // Open external URL
 ipcMain.handle('open-external-url', async (event, url) => {
   try {
-    await shell.openExternal(url);
+    await openExternalUrl(url);
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
