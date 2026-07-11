@@ -47,5 +47,9 @@
     "png2icons": "2.0.1",
     "sharp": "0.35.3",
     "wait-on": "9.0.10"
+  },
+  "allowScripts": {
+    "electron-winstaller@5.4.0": true,
+    "electron@43.1.0": true
   }
 }
