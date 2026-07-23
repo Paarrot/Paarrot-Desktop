@@ -247,6 +247,10 @@ function extractDeepLinkFromArgv(argv) {
 
 /**
  * Converts a paarrot:// deep link into an in-app hash route.
+ * Supports:
+ * - Hash routes: paarrot://anything/#/login/server/
+ * - Path routes (SSO-safe): paarrot://desktop/login/server/?loginToken=...
+ * Preserves SSO loginToken from the URL query (Synapse inserts it before `#`).
  * @param {string} deepLink - The incoming protocol URL.
  * @returns {string|null} Hash route value without leading #.
  */
@@ -259,17 +263,63 @@ function deepLinkToHashRoute(deepLink) {
     return null;
   }
 
-  const hashIndex = deepLink.indexOf('#');
-  if (hashIndex === -1) {
-    return null;
+  let hashRoute = null;
+  let loginToken = null;
+
+  try {
+    const parsed = new URL(deepLink);
+    loginToken = parsed.searchParams.get('loginToken');
+
+    if (parsed.hash && parsed.hash.length > 1) {
+      const hashValue = parsed.hash.slice(1);
+      hashRoute = hashValue.startsWith('/') ? hashValue : `/${hashValue}`;
+    } else if (parsed.pathname && parsed.pathname !== '/') {
+      // paarrot://desktop/login/... → /login/...
+      hashRoute = parsed.pathname;
+      if (parsed.search && parsed.search.length > 1) {
+        // Keep non-loginToken query on the route; loginToken merged below
+        const params = new URLSearchParams(parsed.search);
+        params.delete('loginToken');
+        const rest = params.toString();
+        if (rest) {
+          hashRoute += `?${rest}`;
+        }
+      }
+    }
+  } catch {
+    const hashIndex = deepLink.indexOf('#');
+    if (hashIndex !== -1) {
+      const hashValue = deepLink.slice(hashIndex + 1);
+      if (hashValue) {
+        hashRoute = hashValue.startsWith('/') ? hashValue : `/${hashValue}`;
+      }
+    }
+
+    const match = deepLink.match(/[?&]loginToken=([^&#]+)/i);
+    if (match) {
+      try {
+        loginToken = decodeURIComponent(match[1]);
+      } catch {
+        loginToken = match[1];
+      }
+    }
   }
 
-  const hashValue = deepLink.slice(hashIndex + 1);
-  if (!hashValue) {
-    return null;
+  if (loginToken) {
+    if (!hashRoute) {
+      hashRoute = '/';
+    }
+    const queryIndex = hashRoute.indexOf('?');
+    const pathPart = queryIndex === -1 ? hashRoute : hashRoute.slice(0, queryIndex);
+    const params = new URLSearchParams(queryIndex === -1 ? '' : hashRoute.slice(queryIndex + 1));
+    if (!params.has('loginToken')) {
+      params.set('loginToken', loginToken);
+    }
+    const query = params.toString();
+    hashRoute = query ? `${pathPart}?${query}` : pathPart;
   }
 
-  return hashValue.startsWith('/') ? hashValue : `/${hashValue}`;
+  return hashRoute;
 }
 
 /**
@@ -387,6 +437,129 @@ function queryWindowsRegistryDefaultSync(keyPath) {
 function syncProtocolRegistrationState() {
   protocolRegistrationState = registerAppProtocol();
   console.log(`[Protocol] ${PROTOCOL_SCHEME}:// before=${protocolRegistrationState.before} registerCall=${protocolRegistrationState.registerCall} after=${protocolRegistrationState.after}${protocolRegistrationState.error ? ` error=${protocolRegistrationState.error}` : ''}`);
+}
+
+/**
+ * Refresh Linux xdg-mime association for paarrot:// to the current app desktop file.
+ * AppImage upgrades often leave a stale desktop id in mimeapps.list.
+ */
+async function ensureLinuxProtocolHandler() {
+  const home = app.getPath('home');
+  const searchDirs = [
+    path.join(home, '.local', 'share', 'applications'),
+    '/usr/share/applications',
+    '/var/lib/flatpak/exports/share/applications',
+  ];
+
+  let desktopId = null;
+  for (const dir of searchDirs) {
+    try {
+      if (!fs.existsSync(dir)) continue;
+      const entries = fs.readdirSync(dir);
+      // Prefer the newest AppImageLauncher desktop entry when several exist.
+      const matches = entries
+        .filter((name) => /paarrot/i.test(name) && name.endsWith('.desktop'))
+        .map((name) => {
+          try {
+            return { name, mtime: fs.statSync(path.join(dir, name)).mtimeMs };
+          } catch {
+            return { name, mtime: 0 };
+          }
+        })
+        .sort((a, b) => b.mtime - a.mtime);
+      if (matches.length > 0) {
+        desktopId = matches[0].name;
+        break;
+      }
+    } catch {
+      // keep looking
+    }
+  }
+
+  if (!desktopId) {
+    desktopId = 'paarrot.desktop';
+  }
+
+  // Rewrite mimeapps.list so stale AppImage ids cannot win over xdg-mime default.
+  try {
+    const mimeappsPath = path.join(home, '.config', 'mimeapps.list');
+    let content = '';
+    try {
+      content = fs.readFileSync(mimeappsPath, 'utf8');
+    } catch {
+      content = '';
+    }
+
+    const schemeLine = `x-scheme-handler/${PROTOCOL_SCHEME}=${desktopId}`;
+    const lines = content ? content.split(/\r?\n/) : [];
+    let section = null;
+    const next = [];
+    let wroteDefault = false;
+    let wroteAdded = false;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed === '[Default Applications]' || trimmed === '[Added Associations]') {
+        section = trimmed;
+        next.push(line);
+        continue;
+      }
+      if (trimmed.startsWith('x-scheme-handler/paarrot=')) {
+        if (section === '[Default Applications]') {
+          next.push(schemeLine);
+          wroteDefault = true;
+        } else if (section === '[Added Associations]') {
+          next.push(`${schemeLine};`);
+          wroteAdded = true;
+        }
+        continue;
+      }
+      next.push(line);
+    }
+
+    if (!next.some((l) => l.trim() === '[Default Applications]')) {
+      next.push('', '[Default Applications]');
+    }
+    if (!wroteDefault) {
+      const idx = next.findIndex((l) => l.trim() === '[Default Applications]');
+      next.splice(idx + 1, 0, schemeLine);
+    }
+    if (!next.some((l) => l.trim() === '[Added Associations]')) {
+      next.unshift('[Added Associations]');
+    }
+    if (!wroteAdded) {
+      const idx = next.findIndex((l) => l.trim() === '[Added Associations]');
+      next.splice(idx + 1, 0, `${schemeLine};`);
+    }
+
+    fs.mkdirSync(path.dirname(mimeappsPath), { recursive: true });
+    fs.writeFileSync(mimeappsPath, `${next.join('\n').replace(/\n{3,}/g, '\n\n').trim()}\n`);
+    console.log(`[Protocol] mimeapps.list → ${desktopId} for x-scheme-handler/${PROTOCOL_SCHEME}`);
+  } catch (error) {
+    console.warn('[Protocol] Failed to rewrite mimeapps.list:', error);
+  }
+
+  await new Promise((resolve) => {
+    execFile(
+      'xdg-mime',
+      ['default', desktopId, `x-scheme-handler/${PROTOCOL_SCHEME}`],
+      { timeout: 5000 },
+      (error, _stdout, stderr) => {
+        if (error) {
+          console.warn(`[Protocol] xdg-mime default failed (${desktopId}):`, error.message, stderr);
+        } else {
+          console.log(`[Protocol] xdg-mime default → ${desktopId} for x-scheme-handler/${PROTOCOL_SCHEME}`);
+        }
+        resolve();
+      }
+    );
+  });
+
+  await new Promise((resolve) => {
+    execFile('update-desktop-database', [path.join(home, '.local', 'share', 'applications')], { timeout: 5000 }, () => {
+      resolve();
+    });
+  });
 }
 
 /**
@@ -920,6 +1093,12 @@ app.whenReady().then(() => {
 
   syncProtocolRegistrationState();
 
+  if (process.platform === 'linux') {
+    ensureLinuxProtocolHandler().catch((error) => {
+      console.warn('[Protocol] Startup Linux protocol ensure failed:', error);
+    });
+  }
+
   createWindow();
   createTray();
 
@@ -1052,6 +1231,14 @@ ipcMain.handle('protocol:repair', async () => {
   }
 
   syncProtocolRegistrationState();
+
+  if (process.platform === 'linux') {
+    try {
+      await ensureLinuxProtocolHandler();
+    } catch (error) {
+      console.warn('[Protocol] Failed to refresh Linux protocol handler:', error);
+    }
+  }
 
   const status = await getProtocolStatusPayload();
   return {
