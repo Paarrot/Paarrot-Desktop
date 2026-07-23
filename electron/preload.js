@@ -130,6 +130,7 @@ contextBridge.exposeInMainWorld('electron', {
   updater: {
     checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
     downloadAndInstallUpdate: () => ipcRenderer.invoke('download-and-install-update'),
+    isMock: () => ipcRenderer.invoke('updater-is-mock'),
     onUpdateAvailable: (callback) => {
       ipcRenderer.on('update-available', (_, info) => callback(info));
     },
@@ -138,6 +139,9 @@ contextBridge.exposeInMainWorld('electron', {
     },
     onUpdateDownloaded: (callback) => {
       ipcRenderer.on('update-downloaded', (_, info) => callback(info));
+    },
+    onUpdateNotAvailable: (callback) => {
+      ipcRenderer.on('update-not-available', (_, info) => callback(info));
     },
     downloadUpdate: () => ipcRenderer.invoke('download-update'),
     installUpdate: () => ipcRenderer.invoke('install-update'),

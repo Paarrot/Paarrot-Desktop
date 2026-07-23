@@ -1112,18 +1112,27 @@ app.whenReady().then(() => {
     console.error('Failed to start API server:', err);
   });
   
-  // Check for updates on startup (not in development mode)
-  if (!isDev) {
-    // Check for updates on start (after 3 seconds)
-    setTimeout(() => {
-      autoUpdater.checkForUpdates().catch(err => {
-        console.error('Failed to check for updates:', err);
+  // Check for updates on startup
+  setTimeout(() => {
+    if (isDev) {
+      // Exercise the title-bar updater UI with a mock update.
+      sendUpdaterEvent('update-available', {
+        version: '99.0.0-dev',
+        releaseNotes: 'Mock update for development — download to preview the title-bar progress UI.',
+        releaseDate: new Date().toISOString(),
+        mock: true,
       });
-    }, 3000);
+      return;
+    }
+    autoUpdater.checkForUpdates().catch((err) => {
+      console.error('Failed to check for updates:', err);
+    });
+  }, 2500);
 
+  if (!isDev) {
     // Check for updates every 6 hours
     setInterval(() => {
-      autoUpdater.checkForUpdates().catch(err => {
+      autoUpdater.checkForUpdates().catch((err) => {
         console.error('Failed to check for updates:', err);
       });
     }, 6 * 60 * 60 * 1000);
@@ -1382,10 +1391,61 @@ ipcMain.handle('get-background-sync-state', async () => {
   return { success: true, data: 'NotApplicable' };
 });
 
-// Auto-updater IPC handlers
+// Auto-updater IPC handlers (mock in development so title-bar UI can be exercised)
+let mockDownloadTimer = null;
+let mockDownloadPercent = 0;
+
+function sendUpdaterEvent(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, payload);
+  }
+}
+
+function startMockDownload() {
+  if (mockDownloadTimer) {
+    clearInterval(mockDownloadTimer);
+  }
+  mockDownloadPercent = 0;
+  sendUpdaterEvent('update-download-progress', {
+    percent: 0,
+    transferred: 0,
+    total: 100,
+    mock: true,
+  });
+
+  mockDownloadTimer = setInterval(() => {
+    mockDownloadPercent = Math.min(100, mockDownloadPercent + 4 + Math.random() * 6);
+    const percent = Math.round(mockDownloadPercent);
+    sendUpdaterEvent('update-download-progress', {
+      percent,
+      transferred: percent,
+      total: 100,
+      mock: true,
+    });
+
+    if (percent >= 100) {
+      clearInterval(mockDownloadTimer);
+      mockDownloadTimer = null;
+      sendUpdaterEvent('update-downloaded', {
+        version: '99.0.0-dev',
+        releaseNotes: 'Mock update for development.',
+        mock: true,
+      });
+    }
+  }, 180);
+}
+
 ipcMain.handle('check-for-updates', async () => {
   if (isDev) {
-    return { success: false, error: 'Updates are not available in development mode' };
+    sendUpdaterEvent('update-checking', { mock: true });
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    sendUpdaterEvent('update-available', {
+      version: '99.0.0-dev',
+      releaseNotes: 'Mock update for development — download to preview the title-bar progress UI.',
+      releaseDate: new Date().toISOString(),
+      mock: true,
+    });
+    return { success: true, data: { updateInfo: { version: '99.0.0-dev' }, mock: true } };
   }
   try {
     const result = await autoUpdater.checkForUpdates();
@@ -1397,7 +1457,8 @@ ipcMain.handle('check-for-updates', async () => {
 
 ipcMain.handle('download-update', async () => {
   if (isDev) {
-    return { success: false, error: 'Updates are not available in development mode' };
+    startMockDownload();
+    return { success: true, data: { mock: true } };
   }
   try {
     await autoUpdater.downloadUpdate();
@@ -1409,7 +1470,12 @@ ipcMain.handle('download-update', async () => {
 
 ipcMain.handle('install-update', () => {
   if (isDev) {
-    return { success: false, error: 'Updates are not available in development mode' };
+    sendUpdaterEvent('update-not-available', {
+      version: app.getVersion(),
+      mock: true,
+      message: 'Mock install — restart skipped in development.',
+    });
+    return { success: true, data: { mock: true } };
   }
   autoUpdater.quitAndInstall();
   return { success: true };
@@ -1417,7 +1483,8 @@ ipcMain.handle('install-update', () => {
 
 ipcMain.handle('download-and-install-update', async () => {
   if (isDev) {
-    return { success: false, error: 'Updates are not available in development mode' };
+    startMockDownload();
+    return { success: true, data: { mock: true } };
   }
   try {
     await autoUpdater.downloadUpdate();
@@ -1427,6 +1494,8 @@ ipcMain.handle('download-and-install-update', async () => {
     return { success: false, error: error.message };
   }
 });
+
+ipcMain.handle('updater-is-mock', () => ({ success: true, data: { mock: isDev } }));
 
 // Screen capture / desktopCapturer handler
 ipcMain.handle('get-desktop-sources', async (event, opts) => {
