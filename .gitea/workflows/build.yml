@@ -295,7 +295,13 @@ jobs:
             "-fsS", "-H", "Authorization: token $env:GH_TOKEN",
             "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$TAG_NAME"
           )
-          $ghUploadUrl = ($ghRelease.upload_url -replace '\{\?name,label\}$', '')
+          # GitHub returns upload_url like .../assets{?name,label}
+          $ghUploadUrl = [string]$ghRelease.upload_url
+          if ([string]::IsNullOrWhiteSpace($ghUploadUrl)) {
+            throw "GitHub release $($ghRelease.id) has no upload_url"
+          }
+          $ghUploadUrl = $ghUploadUrl -replace '\{\?[^}]*\}', ''
+          Write-Host "GitHub upload base: $ghUploadUrl"
 
           function Upload-One([string]$File) {
             $filename = [System.IO.Path]::GetFileName($File)
@@ -333,12 +339,15 @@ jobs:
               }
             }
 
+            # Brace the variable — `$url?name=` is parsed as PowerShell's null-conditional.
+            $ghAssetUrl = "${ghUploadUrl}?name=$([uri]::EscapeDataString($filename))"
+            Write-Host "  GitHub URL: $ghAssetUrl"
             & curl.exe -fsS --max-time 0 --retry 5 --retry-delay 10 `
               -X POST `
               -H "Authorization: token $env:GH_TOKEN" `
               -H "Content-Type: application/octet-stream" `
               --data-binary "@$File" `
-              "$ghUploadUrl?name=$filename" | Out-Null
+              $ghAssetUrl | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "GitHub upload failed for $filename" }
             Write-Host "  GitHub: ok"
           }
