@@ -216,7 +216,9 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           # Use the same host/scheme the runner already used for origin (not public HTTPS).
-          $origin = (git remote get-url origin).TrimEnd('/', '.git')
+          $origin = (git remote get-url origin).Trim()
+          $origin = $origin.TrimEnd('/')
+          if ($origin.EndsWith('.git')) { $origin = $origin.Substring(0, $origin.Length - 4) }
           $base = $origin.Substring(0, $origin.LastIndexOf('/'))
           $cinnyUrl = "$base/cinny.git"
           Write-Host "Rewriting submodule URL to $cinnyUrl"
