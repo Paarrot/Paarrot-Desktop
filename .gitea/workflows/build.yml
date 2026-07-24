@@ -8,6 +8,9 @@ on:
     tags:
       - 'v*'
 
+# Large AppImage/exe uploads time out on Gitea's actions artifact pipeline.
+# Build jobs publish assets straight to Gitea/GitHub releases via the REST API.
+
 jobs:
   increment-version:
     runs-on: ubuntu-latest
@@ -105,10 +108,101 @@ jobs:
             echo "VERSION=${{ steps.decide.outputs.CURRENT_VERSION }}" >> $GITHUB_OUTPUT
           fi
 
+  prepare-release:
+    runs-on: ubuntu-latest
+    needs: increment-version
+    if: always() && needs.increment-version.outputs.should_build == 'true'
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+      tag: ${{ steps.version.outputs.TAG_NAME }}
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+      
+      - name: Pull latest (after version bump)
+        if: github.ref == 'refs/heads/main'
+        run: git pull origin main
+      
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -n "${{ needs.increment-version.outputs.version }}" ]; then
+            VERSION="${{ needs.increment-version.outputs.version }}"
+          else
+            VERSION=$(grep -Po '"version":\s*"\K[^"]+' package.json | head -1)
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=v$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+      
+      - name: Create and push tag
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TAG_NAME="v${VERSION}"
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag $TAG_NAME already exists"
+          else
+            git config user.name "GitHub Actions"
+            git config user.email "actions@github.com"
+            git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+            git push origin "$TAG_NAME"
+          fi
+      
+      - name: Ensure Gitea release
+        env:
+          GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TAG_NAME="v${VERSION}"
+          API_BASE="${{ github.server_url }}/api/v1"
+          REPO="${{ github.repository }}"
+
+          RELEASE_ID=$(curl -fsS -H "Authorization: token ${GITEA_TOKEN}" \
+            "${API_BASE}/repos/${REPO}/releases/tags/${TAG_NAME}" | jq -r '.id // empty' || true)
+
+          if [ -z "$RELEASE_ID" ]; then
+            echo "Creating Gitea release ${TAG_NAME}..."
+            RELEASE_ID=$(curl -fsS -X POST \
+              -H "Authorization: token ${GITEA_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"tag_name\": \"${TAG_NAME}\", \"name\": \"Release ${TAG_NAME}\", \"body\": \"Release ${VERSION}\", \"draft\": false, \"prerelease\": false}" \
+              "${API_BASE}/repos/${REPO}/releases" | jq -r '.id')
+          fi
+
+          echo "Gitea release id: ${RELEASE_ID}"
+      
+      - name: Ensure GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GHTOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          TAG_NAME="v${VERSION}"
+          GITHUB_REPO="Paarrot/Paarrot-Desktop"
+
+          RELEASE_ID=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPO}/releases/tags/${TAG_NAME}" | jq -r '.id // empty' || true)
+
+          if [ -z "$RELEASE_ID" ]; then
+            echo "Creating GitHub release ${TAG_NAME}..."
+            RELEASE_ID=$(curl -fsS -X POST \
+              -H "Authorization: token ${GH_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"tag_name\": \"${TAG_NAME}\", \"name\": \"Release ${TAG_NAME}\", \"body\": \"Release ${VERSION}\", \"draft\": false, \"prerelease\": false}" \
+              "https://api.github.com/repos/${GITHUB_REPO}/releases" | jq -r '.id')
+          fi
+
+          echo "GitHub release id: ${RELEASE_ID}"
+
   build-windows:
     runs-on: windows
-    needs: increment-version
-    if: always() && (needs.increment-version.outputs.should_build == 'true' || needs.increment-version.result == 'skipped')
+    needs: [increment-version, prepare-release]
+    if: always() && needs.prepare-release.result == 'success'
     
     steps:
       - name: Checkout repository
@@ -162,17 +256,72 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GHTOKEN }}
       
-      - name: Upload NSIS Installer (x64)
-        uses: actions/upload-artifact@v3
-        with:
-          name: Paarrot-Setup-x64.exe
-          path: dist-electron/Paarrot-*-win-x64.exe
-      
-      - name: Upload latest.yml
-        uses: actions/upload-artifact@v3
-        with:
-          name: latest.yml
-          path: dist-electron/latest.yml
+      - name: Upload Windows assets to releases
+        shell: bash
+        env:
+          GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GHTOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.prepare-release.outputs.version }}"
+          TAG_NAME="${{ needs.prepare-release.outputs.tag }}"
+          API_BASE="${{ github.server_url }}/api/v1"
+          REPO="${{ github.repository }}"
+          GITHUB_REPO="Paarrot/Paarrot-Desktop"
+
+          GITEA_RELEASE_ID=$(curl -fsS -H "Authorization: token ${GITEA_TOKEN}" \
+            "${API_BASE}/repos/${REPO}/releases/tags/${TAG_NAME}" | jq -r '.id')
+          GH_RELEASE_ID=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPO}/releases/tags/${TAG_NAME}" | jq -r '.id')
+          GH_UPLOAD_URL=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPO}/releases/${GH_RELEASE_ID}" | jq -r '.upload_url' | sed 's/{?name,label}//')
+
+          upload_one() {
+            local FILE="$1"
+            local FILENAME
+            FILENAME=$(basename "$FILE")
+            echo "Uploading ${FILENAME} ($(du -h "$FILE" | cut -f1))..."
+
+            # Replace existing asset on Gitea if re-running
+            OLD_ID=$(curl -fsS -H "Authorization: token ${GITEA_TOKEN}" \
+              "${API_BASE}/repos/${REPO}/releases/${GITEA_RELEASE_ID}/assets" \
+              | jq -r --arg n "$FILENAME" '.[] | select(.name == $n) | .id' || true)
+            if [ -n "${OLD_ID:-}" ]; then
+              curl -fsS -X DELETE -H "Authorization: token ${GITEA_TOKEN}" \
+                "${API_BASE}/repos/${REPO}/releases/${GITEA_RELEASE_ID}/assets/${OLD_ID}" >/dev/null
+            fi
+
+            curl -fsS --max-time 0 --retry 5 --retry-delay 10 \
+              -X POST \
+              -H "Authorization: token ${GITEA_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"${FILE}" \
+              "${API_BASE}/repos/${REPO}/releases/${GITEA_RELEASE_ID}/assets?name=${FILENAME}" \
+              >/dev/null
+            echo "  Gitea: ok"
+
+            OLD_GH=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
+              "https://api.github.com/repos/${GITHUB_REPO}/releases/${GH_RELEASE_ID}/assets" \
+              | jq -r --arg n "$FILENAME" '.[] | select(.name == $n) | .id' || true)
+            if [ -n "${OLD_GH:-}" ]; then
+              curl -fsS -X DELETE -H "Authorization: token ${GH_TOKEN}" \
+                "https://api.github.com/repos/${GITHUB_REPO}/releases/assets/${OLD_GH}" >/dev/null
+            fi
+
+            curl -fsS --max-time 0 --retry 5 --retry-delay 10 \
+              -X POST \
+              -H "Authorization: token ${GH_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"${FILE}" \
+              "${GH_UPLOAD_URL}?name=${FILENAME}" \
+              >/dev/null
+            echo "  GitHub: ok"
+          }
+
+          shopt -s nullglob
+          for FILE in dist-electron/Paarrot-*-win-x64.exe dist-electron/latest.yml; do
+            upload_one "$FILE"
+          done
       
       - name: List build output
         shell: powershell
@@ -181,8 +330,8 @@ jobs:
 
   build-linux:
     runs-on: ubuntu-latest
-    needs: increment-version
-    if: always() && (needs.increment-version.outputs.should_build == 'true' || needs.increment-version.result == 'skipped')
+    needs: [increment-version, prepare-release]
+    if: always() && needs.prepare-release.result == 'success'
     
     steps:
       - name: Checkout repository
@@ -233,208 +382,126 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GHTOKEN }}
       
-      - name: Upload AppImage
-        uses: actions/upload-artifact@v3
-        with:
-          name: Paarrot-Linux-x64.AppImage
-          path: dist-electron/Paarrot-*.AppImage
-      
-      - name: Upload latest-linux.yml
-        uses: actions/upload-artifact@v3
-        with:
-          name: latest-linux.yml
-          path: dist-electron/latest-linux.yml
+      - name: Upload Linux assets to releases
+        env:
+          GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GHTOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.prepare-release.outputs.version }}"
+          TAG_NAME="${{ needs.prepare-release.outputs.tag }}"
+          API_BASE="${{ github.server_url }}/api/v1"
+          REPO="${{ github.repository }}"
+          GITHUB_REPO="Paarrot/Paarrot-Desktop"
 
-  create-release:
+          GITEA_RELEASE_ID=$(curl -fsS -H "Authorization: token ${GITEA_TOKEN}" \
+            "${API_BASE}/repos/${REPO}/releases/tags/${TAG_NAME}" | jq -r '.id')
+          GH_RELEASE_ID=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPO}/releases/tags/${TAG_NAME}" | jq -r '.id')
+          GH_UPLOAD_URL=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPO}/releases/${GH_RELEASE_ID}" | jq -r '.upload_url' | sed 's/{?name,label}//')
+
+          upload_one() {
+            local FILE="$1"
+            local FILENAME
+            FILENAME=$(basename "$FILE")
+            echo "Uploading ${FILENAME} ($(du -h "$FILE" | cut -f1))..."
+
+            OLD_ID=$(curl -fsS -H "Authorization: token ${GITEA_TOKEN}" \
+              "${API_BASE}/repos/${REPO}/releases/${GITEA_RELEASE_ID}/assets" \
+              | jq -r --arg n "$FILENAME" '.[] | select(.name == $n) | .id' || true)
+            if [ -n "${OLD_ID:-}" ]; then
+              curl -fsS -X DELETE -H "Authorization: token ${GITEA_TOKEN}" \
+                "${API_BASE}/repos/${REPO}/releases/${GITEA_RELEASE_ID}/assets/${OLD_ID}" >/dev/null
+            fi
+
+            curl -fsS --max-time 0 --retry 5 --retry-delay 10 \
+              -X POST \
+              -H "Authorization: token ${GITEA_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"${FILE}" \
+              "${API_BASE}/repos/${REPO}/releases/${GITEA_RELEASE_ID}/assets?name=${FILENAME}" \
+              >/dev/null
+            echo "  Gitea: ok"
+
+            OLD_GH=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
+              "https://api.github.com/repos/${GITHUB_REPO}/releases/${GH_RELEASE_ID}/assets" \
+              | jq -r --arg n "$FILENAME" '.[] | select(.name == $n) | .id' || true)
+            if [ -n "${OLD_GH:-}" ]; then
+              curl -fsS -X DELETE -H "Authorization: token ${GH_TOKEN}" \
+                "https://api.github.com/repos/${GITHUB_REPO}/releases/assets/${OLD_GH}" >/dev/null
+            fi
+
+            curl -fsS --max-time 0 --retry 5 --retry-delay 10 \
+              -X POST \
+              -H "Authorization: token ${GH_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"${FILE}" \
+              "${GH_UPLOAD_URL}?name=${FILENAME}" \
+              >/dev/null
+            echo "  GitHub: ok"
+          }
+
+          shopt -s nullglob
+          for FILE in dist-electron/Paarrot-*.AppImage dist-electron/latest-linux.yml; do
+            upload_one "$FILE"
+          done
+
+  finalize-release:
     runs-on: ubuntu-latest
-    needs: [increment-version, build-windows, build-linux]
-    if: always() && (needs.build-windows.result == 'success' || needs.build-linux.result == 'success')
+    needs: [increment-version, prepare-release, build-windows, build-linux]
+    if: always() && needs.prepare-release.result == 'success' && (needs.build-windows.result == 'success' || needs.build-linux.result == 'success')
     
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.ref_name }}
-      
-      - name: Pull latest (after version bump)
-        if: github.ref == 'refs/heads/main'
-        run: git pull origin main
-      
-      - name: Get version
-        id: version
-        run: |
-          # Use version from increment-version job if available, otherwise read from file
-          if [ -n "${{ needs.increment-version.outputs.version }}" ]; then
-            VERSION="${{ needs.increment-version.outputs.version }}"
-          else
-            VERSION=$(grep -Po '"version":\s*"\K[^"]+' package.json | head -1)
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "Version: $VERSION"
-      
-      - name: Check if tag exists
-        id: tag_check
-        run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists"
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "Tag v$VERSION does not exist"
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-      
-      - name: Create and push tag
-        if: steps.tag_check.outputs.exists == 'false'
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git tag -a "v${{ steps.version.outputs.VERSION }}" -m "Release v${{ steps.version.outputs.VERSION }}"
-          git push origin "v${{ steps.version.outputs.VERSION }}"
-      
-      - name: Download all artifacts
-        uses: actions/download-artifact@v3
-        with:
-          path: artifacts
-      
-      - name: Prepare release files
-        run: |
-          mkdir -p release-files
-          find artifacts -type f \( -name "*.exe" -o -name "*.AppImage" -o -name "*.yml" \) -exec cp {} release-files/ \;
-          ls -la release-files/
-      
-      - name: Create or Update Release
+      - name: Cleanup old Gitea releases
         env:
           GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          TAG_NAME="v${VERSION}"
-          API_BASE="http://synbox.ruv.wtf:8418/api/v1"
-          REPO="litruv/cinny-desktop"
-          
-          # Delete old releases (keep only current)
-          echo "Cleaning up old releases..."
-          OLD_RELEASES=$(curl -s -H "Authorization: token ${GITEA_TOKEN}" \
-            "${API_BASE}/repos/${REPO}/releases" | jq -r '.[] | select(.tag_name != "'${TAG_NAME}'") | .id')
-          
+          set -euo pipefail
+          TAG_NAME="${{ needs.prepare-release.outputs.tag }}"
+          API_BASE="${{ github.server_url }}/api/v1"
+          REPO="${{ github.repository }}"
+
+          echo "Cleaning up old Gitea releases (keeping ${TAG_NAME})..."
+          OLD_RELEASES=$(curl -fsS -H "Authorization: token ${GITEA_TOKEN}" \
+            "${API_BASE}/repos/${REPO}/releases" | jq -r --arg t "$TAG_NAME" '.[] | select(.tag_name != $t) | .id')
+
           for OLD_ID in $OLD_RELEASES; do
-            echo "Deleting old release ${OLD_ID}..."
-            OLD_TAG=$(curl -s -H "Authorization: token ${GITEA_TOKEN}" \
+            [ -n "$OLD_ID" ] || continue
+            OLD_TAG=$(curl -fsS -H "Authorization: token ${GITEA_TOKEN}" \
               "${API_BASE}/repos/${REPO}/releases/${OLD_ID}" | jq -r '.tag_name')
-            
-            # Delete release
-            curl -s -X DELETE -H "Authorization: token ${GITEA_TOKEN}" \
-              "${API_BASE}/repos/${REPO}/releases/${OLD_ID}"
-            
-            # Delete tag
-            if [ -n "$OLD_TAG" ]; then
-              echo "Deleting old tag ${OLD_TAG}..."
-              curl -s -X DELETE -H "Authorization: token ${GITEA_TOKEN}" \
-                "${API_BASE}/repos/${REPO}/tags/${OLD_TAG}"
+            echo "Deleting Gitea release ${OLD_ID} (${OLD_TAG})..."
+            curl -fsS -X DELETE -H "Authorization: token ${GITEA_TOKEN}" \
+              "${API_BASE}/repos/${REPO}/releases/${OLD_ID}" >/dev/null || true
+            if [ -n "$OLD_TAG" ] && [ "$OLD_TAG" != "null" ]; then
+              curl -fsS -X DELETE -H "Authorization: token ${GITEA_TOKEN}" \
+                "${API_BASE}/repos/${REPO}/tags/${OLD_TAG}" >/dev/null || true
             fi
           done
-          
-          # Check if release exists
-          RELEASE_ID=$(curl -s -H "Authorization: token ${GITEA_TOKEN}" \
-            "${API_BASE}/repos/${REPO}/releases/tags/${TAG_NAME}" | jq -r '.id // empty')
-          
-          if [ -z "$RELEASE_ID" ]; then
-            echo "Creating new release for ${TAG_NAME}..."
-            RELEASE_ID=$(curl -s -X POST \
-              -H "Authorization: token ${GITEA_TOKEN}" \
-              -H "Content-Type: application/json" \
-              -d "{\"tag_name\": \"${TAG_NAME}\", \"name\": \"Release ${TAG_NAME}\", \"body\": \"Release ${VERSION}\", \"draft\": false, \"prerelease\": false}" \
-              "${API_BASE}/repos/${REPO}/releases" | jq -r '.id')
-            echo "Created release with ID: ${RELEASE_ID}"
-          else
-            echo "Release exists with ID: ${RELEASE_ID}"
-            # Delete existing assets
-            echo "Deleting existing assets..."
-            ASSETS=$(curl -s -H "Authorization: token ${GITEA_TOKEN}" \
-              "${API_BASE}/repos/${REPO}/releases/${RELEASE_ID}/assets" | jq -r '.[].id')
-            for ASSET_ID in $ASSETS; do
-              echo "Deleting asset ${ASSET_ID}..."
-              curl -s -X DELETE -H "Authorization: token ${GITEA_TOKEN}" \
-                "${API_BASE}/repos/${REPO}/releases/${RELEASE_ID}/assets/${ASSET_ID}"
-            done
-          fi
-          
-          # Upload new assets
-          echo "Uploading assets..."
-          for FILE in release-files/*; do
-            FILENAME=$(basename "$FILE")
-            echo "Uploading ${FILENAME}..."
-            curl -s -X POST \
-              -H "Authorization: token ${GITEA_TOKEN}" \
-              -H "Content-Type: application/octet-stream" \
-              --data-binary "@${FILE}" \
-              "${API_BASE}/repos/${REPO}/releases/${RELEASE_ID}/assets?name=${FILENAME}"
-            echo ""
-          done
-          
-          echo "Release complete!"
       
-      - name: Create GitHub Release
+      - name: Cleanup old GitHub releases
         env:
           GH_TOKEN: ${{ secrets.GHTOKEN }}
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          TAG_NAME="v${VERSION}"
+          set -euo pipefail
+          TAG_NAME="${{ needs.prepare-release.outputs.tag }}"
           GITHUB_REPO="Paarrot/Paarrot-Desktop"
-          
-          # Delete old GitHub releases (keep only current)
-          echo "Cleaning up old GitHub releases..."
-          OLD_RELEASES=$(curl -s -H "Authorization: token ${GH_TOKEN}" \
-            "https://api.github.com/repos/${GITHUB_REPO}/releases" | jq -r '.[] | select(.tag_name != "'${TAG_NAME}'") | .id')
-          
+
+          echo "Cleaning up old GitHub releases (keeping ${TAG_NAME})..."
+          OLD_RELEASES=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPO}/releases" | jq -r --arg t "$TAG_NAME" '.[] | select(.tag_name != $t) | .id')
+
           for OLD_ID in $OLD_RELEASES; do
-            echo "Deleting old GitHub release ${OLD_ID}..."
-            OLD_TAG=$(curl -s -H "Authorization: token ${GH_TOKEN}" \
+            [ -n "$OLD_ID" ] || continue
+            OLD_TAG=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
               "https://api.github.com/repos/${GITHUB_REPO}/releases/${OLD_ID}" | jq -r '.tag_name')
-            
-            # Delete release
-            curl -s -X DELETE -H "Authorization: token ${GH_TOKEN}" \
-              "https://api.github.com/repos/${GITHUB_REPO}/releases/${OLD_ID}"
-            
-            # Delete tag
-            if [ -n "$OLD_TAG" ]; then
-              echo "Deleting old GitHub tag ${OLD_TAG}..."
-              curl -s -X DELETE -H "Authorization: token ${GH_TOKEN}" \
-                "https://api.github.com/repos/${GITHUB_REPO}/git/refs/tags/${OLD_TAG}"
+            echo "Deleting GitHub release ${OLD_ID} (${OLD_TAG})..."
+            curl -fsS -X DELETE -H "Authorization: token ${GH_TOKEN}" \
+              "https://api.github.com/repos/${GITHUB_REPO}/releases/${OLD_ID}" >/dev/null || true
+            if [ -n "$OLD_TAG" ] && [ "$OLD_TAG" != "null" ]; then
+              curl -fsS -X DELETE -H "Authorization: token ${GH_TOKEN}" \
+                "https://api.github.com/repos/${GITHUB_REPO}/git/refs/tags/${OLD_TAG}" >/dev/null || true
             fi
           done
-          
-          # Check if release exists on GitHub
-          RELEASE_ID=$(curl -s -H "Authorization: token ${GH_TOKEN}" \
-            "https://api.github.com/repos/${GITHUB_REPO}/releases/tags/${TAG_NAME}" | jq -r '.id // empty')
-          
-          if [ -z "$RELEASE_ID" ]; then
-            echo "Creating new GitHub release for ${TAG_NAME}..."
-            RELEASE_ID=$(curl -s -X POST \
-              -H "Authorization: token ${GH_TOKEN}" \
-              -H "Content-Type: application/json" \
-              -d "{\"tag_name\": \"${TAG_NAME}\", \"name\": \"Release ${TAG_NAME}\", \"body\": \"Release ${VERSION}\", \"draft\": false, \"prerelease\": false}" \
-              "https://api.github.com/repos/${GITHUB_REPO}/releases" | jq -r '.id')
-            echo "Created GitHub release with ID: ${RELEASE_ID}"
-          else
-            echo "GitHub release exists with ID: ${RELEASE_ID}"
-          fi
-          
-          # Upload assets to GitHub
-          echo "Uploading assets to GitHub..."
-          UPLOAD_URL=$(curl -s -H "Authorization: token ${GH_TOKEN}" \
-            "https://api.github.com/repos/${GITHUB_REPO}/releases/${RELEASE_ID}" | jq -r '.upload_url' | sed 's/{?name,label}//')
-          
-          for FILE in release-files/*; do
-            FILENAME=$(basename "$FILE")
-            echo "Uploading ${FILENAME} to GitHub..."
-            curl -s -X POST \
-              -H "Authorization: token ${GH_TOKEN}" \
-              -H "Content-Type: application/octet-stream" \
-              --data-binary "@${FILE}" \
-              "${UPLOAD_URL}?name=${FILENAME}"
-            echo ""
-          done
-          
-          echo "GitHub release complete!"
+
+          echo "Release finalize complete for ${TAG_NAME}"
