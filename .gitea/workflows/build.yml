@@ -214,16 +214,27 @@ jobs:
       - name: Checkout submodules manually
         shell: powershell
         run: |
+          $ErrorActionPreference = "Stop"
+          # Use the same host/scheme the runner already used for origin (not public HTTPS).
+          $origin = (git remote get-url origin).TrimEnd('/', '.git')
+          $base = $origin.Substring(0, $origin.LastIndexOf('/'))
+          $cinnyUrl = "$base/cinny.git"
+          Write-Host "Rewriting submodule URL to $cinnyUrl"
+          git config submodule.cinny.url $cinnyUrl
           git submodule sync --recursive
 
-          if (git submodule update --init --recursive) {
+          git submodule update --init --recursive
+          if ($LASTEXITCODE -eq 0) {
             Write-Host "Submodules checked out at pinned commits."
             exit 0
           }
 
           Write-Warning "Pinned submodule commit is unavailable on remote. Falling back to remote submodule HEAD."
           git submodule deinit -f --all
+          git config submodule.cinny.url $cinnyUrl
+          git submodule sync --recursive
           git submodule update --init --recursive --remote
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           Write-Host "Resolved submodule commit:"
           git -C cinny rev-parse HEAD
@@ -257,71 +268,82 @@ jobs:
           GH_TOKEN: ${{ secrets.GHTOKEN }}
       
       - name: Upload Windows assets to releases
-        shell: bash
+        shell: powershell
         env:
           GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GHTOKEN }}
         run: |
-          set -euo pipefail
-          VERSION="${{ needs.prepare-release.outputs.version }}"
-          TAG_NAME="${{ needs.prepare-release.outputs.tag }}"
-          API_BASE="${{ github.server_url }}/api/v1"
-          REPO="${{ github.repository }}"
-          GITHUB_REPO="Paarrot/Paarrot-Desktop"
+          $ErrorActionPreference = "Stop"
+          $TAG_NAME = "${{ needs.prepare-release.outputs.tag }}"
+          $API_BASE = "${{ github.server_url }}/api/v1"
+          $REPO = "${{ github.repository }}"
+          $GITHUB_REPO = "Paarrot/Paarrot-Desktop"
 
-          GITEA_RELEASE_ID=$(curl -fsS -H "Authorization: token ${GITEA_TOKEN}" \
-            "${API_BASE}/repos/${REPO}/releases/tags/${TAG_NAME}" | jq -r '.id')
-          GH_RELEASE_ID=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
-            "https://api.github.com/repos/${GITHUB_REPO}/releases/tags/${TAG_NAME}" | jq -r '.id')
-          GH_UPLOAD_URL=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
-            "https://api.github.com/repos/${GITHUB_REPO}/releases/${GH_RELEASE_ID}" | jq -r '.upload_url' | sed 's/{?name,label}//')
-
-          upload_one() {
-            local FILE="$1"
-            local FILENAME
-            FILENAME=$(basename "$FILE")
-            echo "Uploading ${FILENAME} ($(du -h "$FILE" | cut -f1))..."
-
-            # Replace existing asset on Gitea if re-running
-            OLD_ID=$(curl -fsS -H "Authorization: token ${GITEA_TOKEN}" \
-              "${API_BASE}/repos/${REPO}/releases/${GITEA_RELEASE_ID}/assets" \
-              | jq -r --arg n "$FILENAME" '.[] | select(.name == $n) | .id' || true)
-            if [ -n "${OLD_ID:-}" ]; then
-              curl -fsS -X DELETE -H "Authorization: token ${GITEA_TOKEN}" \
-                "${API_BASE}/repos/${REPO}/releases/${GITEA_RELEASE_ID}/assets/${OLD_ID}" >/dev/null
-            fi
-
-            curl -fsS --max-time 0 --retry 5 --retry-delay 10 \
-              -X POST \
-              -H "Authorization: token ${GITEA_TOKEN}" \
-              -H "Content-Type: application/octet-stream" \
-              --data-binary @"${FILE}" \
-              "${API_BASE}/repos/${REPO}/releases/${GITEA_RELEASE_ID}/assets?name=${FILENAME}" \
-              >/dev/null
-            echo "  Gitea: ok"
-
-            OLD_GH=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
-              "https://api.github.com/repos/${GITHUB_REPO}/releases/${GH_RELEASE_ID}/assets" \
-              | jq -r --arg n "$FILENAME" '.[] | select(.name == $n) | .id' || true)
-            if [ -n "${OLD_GH:-}" ]; then
-              curl -fsS -X DELETE -H "Authorization: token ${GH_TOKEN}" \
-                "https://api.github.com/repos/${GITHUB_REPO}/releases/assets/${OLD_GH}" >/dev/null
-            fi
-
-            curl -fsS --max-time 0 --retry 5 --retry-delay 10 \
-              -X POST \
-              -H "Authorization: token ${GH_TOKEN}" \
-              -H "Content-Type: application/octet-stream" \
-              --data-binary @"${FILE}" \
-              "${GH_UPLOAD_URL}?name=${FILENAME}" \
-              >/dev/null
-            echo "  GitHub: ok"
+          function Invoke-JsonCurl([string[]]$CurlArgs) {
+            $raw = & curl.exe @CurlArgs
+            if ($LASTEXITCODE -ne 0) { throw "curl failed: $($CurlArgs -join ' ')" }
+            return ($raw | ConvertFrom-Json)
           }
 
-          shopt -s nullglob
-          for FILE in dist-electron/Paarrot-*-win-x64.exe dist-electron/latest.yml; do
-            upload_one "$FILE"
-          done
+          $giteaRelease = Invoke-JsonCurl @(
+            "-fsS", "-H", "Authorization: token $env:GITEA_TOKEN",
+            "$API_BASE/repos/$REPO/releases/tags/$TAG_NAME"
+          )
+          $ghRelease = Invoke-JsonCurl @(
+            "-fsS", "-H", "Authorization: token $env:GH_TOKEN",
+            "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$TAG_NAME"
+          )
+          $ghUploadUrl = ($ghRelease.upload_url -replace '\{\?name,label\}$', '')
+
+          function Upload-One([string]$File) {
+            $filename = [System.IO.Path]::GetFileName($File)
+            $sizeMb = [math]::Round((Get-Item $File).Length / 1MB, 1)
+            Write-Host "Uploading $filename (${sizeMb} MB)..."
+
+            $giteaAssets = Invoke-JsonCurl @(
+              "-fsS", "-H", "Authorization: token $env:GITEA_TOKEN",
+              "$API_BASE/repos/$REPO/releases/$($giteaRelease.id)/assets"
+            )
+            foreach ($asset in @($giteaAssets)) {
+              if ($asset.name -eq $filename) {
+                & curl.exe -fsS -X DELETE -H "Authorization: token $env:GITEA_TOKEN" `
+                  "$API_BASE/repos/$REPO/releases/$($giteaRelease.id)/assets/$($asset.id)" | Out-Null
+              }
+            }
+
+            & curl.exe -fsS --max-time 0 --retry 5 --retry-delay 10 `
+              -X POST `
+              -H "Authorization: token $env:GITEA_TOKEN" `
+              -H "Content-Type: application/octet-stream" `
+              --data-binary "@$File" `
+              "$API_BASE/repos/$REPO/releases/$($giteaRelease.id)/assets?name=$filename" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Gitea upload failed for $filename" }
+            Write-Host "  Gitea: ok"
+
+            $ghAssets = Invoke-JsonCurl @(
+              "-fsS", "-H", "Authorization: token $env:GH_TOKEN",
+              "https://api.github.com/repos/$GITHUB_REPO/releases/$($ghRelease.id)/assets"
+            )
+            foreach ($asset in @($ghAssets)) {
+              if ($asset.name -eq $filename) {
+                & curl.exe -fsS -X DELETE -H "Authorization: token $env:GH_TOKEN" `
+                  "https://api.github.com/repos/$GITHUB_REPO/releases/assets/$($asset.id)" | Out-Null
+              }
+            }
+
+            & curl.exe -fsS --max-time 0 --retry 5 --retry-delay 10 `
+              -X POST `
+              -H "Authorization: token $env:GH_TOKEN" `
+              -H "Content-Type: application/octet-stream" `
+              --data-binary "@$File" `
+              "$ghUploadUrl?name=$filename" | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "GitHub upload failed for $filename" }
+            Write-Host "  GitHub: ok"
+          }
+
+          Get-ChildItem -Path dist-electron -File |
+            Where-Object { $_.Name -like 'Paarrot-*-win-x64.exe' -or $_.Name -eq 'latest.yml' } |
+            ForEach-Object { Upload-One $_.FullName }
       
       - name: List build output
         shell: powershell
@@ -343,6 +365,14 @@ jobs:
       - name: Checkout submodules manually
         run: |
           set -euo pipefail
+          # Use the same host/scheme the runner already used for origin (not public HTTPS).
+          ORIGIN_URL=$(git remote get-url origin)
+          ORIGIN_URL=${ORIGIN_URL%/}
+          ORIGIN_URL=${ORIGIN_URL%.git}
+          BASE_URL=${ORIGIN_URL%/*}
+          CINNY_URL="${BASE_URL}/cinny.git"
+          echo "Rewriting submodule URL to ${CINNY_URL}"
+          git config submodule.cinny.url "${CINNY_URL}"
           git submodule sync --recursive
 
           if git submodule update --init --recursive; then
@@ -351,7 +381,10 @@ jobs:
           fi
 
           echo "Pinned submodule commit is unavailable on remote. Falling back to remote submodule HEAD."
-          git submodule deinit -f --all
+          git submodule deinit -f --all || true
+          rm -rf cinny .git/modules/cinny
+          git config submodule.cinny.url "${CINNY_URL}"
+          git submodule sync --recursive
           git submodule update --init --recursive --remote
 
           echo "Resolved submodule commit:"
