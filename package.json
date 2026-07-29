@@ -19,7 +19,8 @@
     "build:local": "node -e \"require('fs').copyFileSync('config.json', 'cinny/config.json')\" && cd cinny && npm run build && cd .. && electron-builder",
     "build:linux": "npm run build -- --linux",
     "build:win": "npm run build -- --win",
-    "postman:generate": "node scripts/generate-postman-collection.js"
+    "postman:generate": "node scripts/generate-postman-collection.js",
+    "playground": "npm --prefix cinny run playground"
   },
   "keywords": [],
   "author": {
