@@ -209,6 +209,81 @@
       "name": "Messaging",
       "item": [
         {
+          "name": "Get Group Messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/messages/groups?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "messages",
+                "groups"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Number of recent messages (1-100, default 10)"
+                }
+              ]
+            },
+            "description": "Get the most recent messages across joined group channels (non-DMs)."
+          }
+        },
+        {
+          "name": "Get DM Messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/messages/dms?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "messages",
+                "dms"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Number of recent messages (1-100, default 10)"
+                }
+              ]
+            },
+            "description": "Get the most recent messages across joined direct messages."
+          }
+        },
+        {
+          "name": "Get Combined Messages",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/messages/combined?limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "messages",
+                "combined"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Number of recent messages (1-100, default 10)"
+                }
+              ]
+            },
+            "description": "Get the most recent messages across groups and DMs together."
+          }
+        },
+        {
           "name": "Send Message to Room",
           "request": {
             "method": "POST",

@@ -165,6 +165,87 @@ const collection = {
       name: 'Messaging',
       item: [
         {
+          name: 'Get Group Messages',
+          request: {
+            method: 'GET',
+            header: [],
+            url: {
+              raw: '{{baseUrl}}/messages/groups?limit=10',
+              host: ['{{baseUrl}}'],
+              path: ['messages', 'groups'],
+              query: [{ key: 'limit', value: '10', description: 'Number of recent messages (1-100, default 10)' }],
+            },
+            description: 'Get the most recent messages across joined group channels (non-DMs).',
+          },
+        },
+        {
+          name: 'Get DM Messages',
+          request: {
+            method: 'GET',
+            header: [],
+            url: {
+              raw: '{{baseUrl}}/messages/dms?limit=10',
+              host: ['{{baseUrl}}'],
+              path: ['messages', 'dms'],
+              query: [{ key: 'limit', value: '10', description: 'Number of recent messages (1-100, default 10)' }],
+            },
+            description: 'Get the most recent messages across joined direct messages.',
+          },
+        },
+        {
+          name: 'Get Combined Messages',
+          request: {
+            method: 'GET',
+            header: [],
+            url: {
+              raw: '{{baseUrl}}/messages/combined?limit=10',
+              host: ['{{baseUrl}}'],
+              path: ['messages', 'combined'],
+              query: [{ key: 'limit', value: '10', description: 'Number of recent messages (1-100, default 10)' }],
+            },
+            description: 'Get the most recent messages across groups and DMs together.',
+          },
+        },
+        {
+          name: 'Get Group Unreads',
+          request: {
+            method: 'GET',
+            header: [],
+            url: {
+              raw: '{{baseUrl}}/unreads/groups',
+              host: ['{{baseUrl}}'],
+              path: ['unreads', 'groups'],
+            },
+            description: 'List unread group conversations (non-DMs), including counts and latest message preview.',
+          },
+        },
+        {
+          name: 'Get DM Unreads',
+          request: {
+            method: 'GET',
+            header: [],
+            url: {
+              raw: '{{baseUrl}}/unreads/dms',
+              host: ['{{baseUrl}}'],
+              path: ['unreads', 'dms'],
+            },
+            description: 'List unread DM conversations, including counts and latest message preview.',
+          },
+        },
+        {
+          name: 'Get Combined Unreads',
+          request: {
+            method: 'GET',
+            header: [],
+            url: {
+              raw: '{{baseUrl}}/unreads/combined',
+              host: ['{{baseUrl}}'],
+              path: ['unreads', 'combined'],
+            },
+            description: 'List unread conversations across groups and DMs.',
+          },
+        },
+        {
           name: 'Send Message to Room',
           request: {
             method: 'POST',

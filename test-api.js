@@ -60,6 +60,16 @@ async function runTests() {
   
   // Get current room
   await testEndpoint('Get Current Room', 'GET', '/room/current');
+
+  // Recent messages by scope
+  await testEndpoint('Get Group Messages', 'GET', '/messages/groups');
+  await testEndpoint('Get DM Messages', 'GET', '/messages/dms');
+  await testEndpoint('Get Combined Messages', 'GET', '/messages/combined?limit=10');
+
+  // Unread conversations by scope
+  await testEndpoint('Get Group Unreads', 'GET', '/unreads/groups');
+  await testEndpoint('Get DM Unreads', 'GET', '/unreads/dms');
+  await testEndpoint('Get Combined Unreads', 'GET', '/unreads/combined');
   
   // Toggle mute
   await testEndpoint('Toggle Mute', 'POST', '/mute/toggle');

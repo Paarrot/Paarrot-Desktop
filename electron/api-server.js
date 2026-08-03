@@ -153,6 +153,72 @@ class PaarrotAPIServer {
       }
     });
 
+    // Recent messages across group channels (non-DMs)
+    this.app.get('/messages/groups', async (req, res) => {
+      try {
+        const result = await this.executeAction('get-messages-groups', {
+          limit: req.query.limit,
+        });
+        res.json({ success: true, data: result });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Recent messages across DMs
+    this.app.get('/messages/dms', async (req, res) => {
+      try {
+        const result = await this.executeAction('get-messages-dms', {
+          limit: req.query.limit,
+        });
+        res.json({ success: true, data: result });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Recent messages across groups + DMs
+    this.app.get('/messages/combined', async (req, res) => {
+      try {
+        const result = await this.executeAction('get-messages-combined', {
+          limit: req.query.limit,
+        });
+        res.json({ success: true, data: result });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Unread conversations across group channels (non-DMs)
+    this.app.get('/unreads/groups', async (req, res) => {
+      try {
+        const result = await this.executeAction('get-unreads-groups');
+        res.json({ success: true, data: result });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Unread conversations across DMs
+    this.app.get('/unreads/dms', async (req, res) => {
+      try {
+        const result = await this.executeAction('get-unreads-dms');
+        res.json({ success: true, data: result });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
+    // Unread conversations across groups + DMs
+    this.app.get('/unreads/combined', async (req, res) => {
+      try {
+        const result = await this.executeAction('get-unreads-combined');
+        res.json({ success: true, data: result });
+      } catch (error) {
+        res.status(500).json({ success: false, error: error.message });
+      }
+    });
+
     // 404 handler
     this.app.use((req, res) => {
       res.status(404).json({ 
@@ -169,7 +235,13 @@ class PaarrotAPIServer {
           'GET /channels',
           'POST /message',
           'POST /message/current',
-          'GET /room/current'
+          'GET /room/current',
+          'GET /messages/groups',
+          'GET /messages/dms',
+          'GET /messages/combined',
+          'GET /unreads/groups',
+          'GET /unreads/dms',
+          'GET /unreads/combined'
         ]
       });
     });
@@ -237,6 +309,12 @@ class PaarrotAPIServer {
         console.log('  POST /message');
         console.log('  POST /message/current');
         console.log('  GET  /room/current');
+        console.log('  GET  /messages/groups');
+        console.log('  GET  /messages/dms');
+        console.log('  GET  /messages/combined');
+        console.log('  GET  /unreads/groups');
+        console.log('  GET  /unreads/dms');
+        console.log('  GET  /unreads/combined');
         resolve(port);
       }).on('error', (err) => {
         if (err.code === 'EADDRINUSE') {
