@@ -200,7 +200,7 @@ jobs:
           echo "GitHub release id: ${RELEASE_ID}"
 
   build-windows:
-    runs-on: windows
+    runs-on: ubuntu-latest
     needs: [increment-version, prepare-release]
     if: always() && needs.prepare-release.result == 'success'
     
@@ -210,46 +210,50 @@ jobs:
         with:
           submodules: false
           ref: ${{ github.ref_name }}
-      
+
       - name: Checkout submodules manually
-        shell: powershell
         run: |
-          $ErrorActionPreference = "Stop"
+          set -euo pipefail
           # Use the same host/scheme the runner already used for origin (not public HTTPS).
-          $origin = (git remote get-url origin).Trim()
-          $origin = $origin.TrimEnd('/')
-          if ($origin.EndsWith('.git')) { $origin = $origin.Substring(0, $origin.Length - 4) }
-          $base = $origin.Substring(0, $origin.LastIndexOf('/'))
-          $cinnyUrl = "$base/cinny.git"
-          Write-Host "Rewriting submodule URL to $cinnyUrl"
-          git config submodule.cinny.url $cinnyUrl
+          ORIGIN_URL=$(git remote get-url origin)
+          ORIGIN_URL=${ORIGIN_URL%/}
+          ORIGIN_URL=${ORIGIN_URL%.git}
+          BASE_URL=${ORIGIN_URL%/*}
+          CINNY_URL="${BASE_URL}/cinny.git"
+          echo "Rewriting submodule URL to ${CINNY_URL}"
+          git config submodule.cinny.url "${CINNY_URL}"
           git submodule sync --recursive
 
-          git submodule update --init --recursive
-          if ($LASTEXITCODE -eq 0) {
-            Write-Host "Submodules checked out at pinned commits."
+          if git submodule update --init --recursive; then
+            echo "Submodules checked out at pinned commits."
             exit 0
-          }
+          fi
 
-          Write-Warning "Pinned submodule commit is unavailable on remote. Falling back to remote submodule HEAD."
-          git submodule deinit -f --all
-          git config submodule.cinny.url $cinnyUrl
+          echo "Pinned submodule commit is unavailable on remote. Falling back to remote submodule HEAD."
+          git submodule deinit -f --all || true
+          rm -rf cinny .git/modules/cinny
+          git config submodule.cinny.url "${CINNY_URL}"
           git submodule sync --recursive
           git submodule update --init --recursive --remote
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          Write-Host "Resolved submodule commit:"
+          echo "Resolved submodule commit:"
           git -C cinny rev-parse HEAD
       
       - name: Pull latest (after version bump)
         if: github.ref == 'refs/heads/main'
-        shell: powershell
         run: git pull origin main
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Install Wine (NSIS cross-build)
+        run: |
+          set -euo pipefail
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends wine64 wine32
       
       - name: Install dependencies (root)
         run: npm ci --prefer-offline
@@ -259,107 +263,82 @@ jobs:
         run: npm ci --prefer-offline
       
       - name: Clean previous builds
-        shell: powershell
         run: |
-          if (Test-Path cinny/dist) { Remove-Item -Recurse -Force cinny/dist }
-          if (Test-Path dist-electron) { Remove-Item -Recurse -Force dist-electron }
+          rm -rf cinny/dist dist-electron
       
       - name: Build Electron app
         run: npm run build:local -- --win
         env:
           GH_TOKEN: ${{ secrets.GHTOKEN }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       
       - name: Upload Windows assets to releases
-        shell: powershell
         env:
           GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GHTOKEN }}
         run: |
-          $ErrorActionPreference = "Stop"
-          $TAG_NAME = "${{ needs.prepare-release.outputs.tag }}"
-          $API_BASE = "${{ github.server_url }}/api/v1"
-          $REPO = "${{ github.repository }}"
-          $GITHUB_REPO = "Paarrot/Paarrot-Desktop"
+          set -euo pipefail
+          TAG_NAME="${{ needs.prepare-release.outputs.tag }}"
+          API_BASE="${{ github.server_url }}/api/v1"
+          REPO="${{ github.repository }}"
+          GITHUB_REPO="Paarrot/Paarrot-Desktop"
 
-          function Invoke-JsonCurl([string[]]$CurlArgs) {
-            $raw = & curl.exe @CurlArgs
-            if ($LASTEXITCODE -ne 0) { throw "curl failed: $($CurlArgs -join ' ')" }
-            return ($raw | ConvertFrom-Json)
+          GITEA_RELEASE_ID=$(curl -fsS -H "Authorization: token ${GITEA_TOKEN}" \
+            "${API_BASE}/repos/${REPO}/releases/tags/${TAG_NAME}" | jq -r '.id')
+          GH_RELEASE_ID=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPO}/releases/tags/${TAG_NAME}" | jq -r '.id')
+          GH_UPLOAD_URL=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
+            "https://api.github.com/repos/${GITHUB_REPO}/releases/${GH_RELEASE_ID}" | jq -r '.upload_url' | sed 's/{?name,label}//')
+
+          upload_one() {
+            local FILE="$1"
+            local FILENAME
+            FILENAME=$(basename "$FILE")
+            echo "Uploading ${FILENAME} ($(du -h "$FILE" | cut -f1))..."
+
+            OLD_ID=$(curl -fsS -H "Authorization: token ${GITEA_TOKEN}" \
+              "${API_BASE}/repos/${REPO}/releases/${GITEA_RELEASE_ID}/assets" \
+              | jq -r --arg n "$FILENAME" '.[] | select(.name == $n) | .id' || true)
+            if [ -n "${OLD_ID:-}" ]; then
+              curl -fsS -X DELETE -H "Authorization: token ${GITEA_TOKEN}" \
+                "${API_BASE}/repos/${REPO}/releases/${GITEA_RELEASE_ID}/assets/${OLD_ID}" >/dev/null
+            fi
+
+            curl -fsS --max-time 0 --retry 5 --retry-delay 10 \
+              -X POST \
+              -H "Authorization: token ${GITEA_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"${FILE}" \
+              "${API_BASE}/repos/${REPO}/releases/${GITEA_RELEASE_ID}/assets?name=${FILENAME}" \
+              >/dev/null
+            echo "  Gitea: ok"
+
+            OLD_GH=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
+              "https://api.github.com/repos/${GITHUB_REPO}/releases/${GH_RELEASE_ID}/assets" \
+              | jq -r --arg n "$FILENAME" '.[] | select(.name == $n) | .id' || true)
+            if [ -n "${OLD_GH:-}" ]; then
+              curl -fsS -X DELETE -H "Authorization: token ${GH_TOKEN}" \
+                "https://api.github.com/repos/${GITHUB_REPO}/releases/assets/${OLD_GH}" >/dev/null
+            fi
+
+            curl -fsS --max-time 0 --retry 5 --retry-delay 10 \
+              -X POST \
+              -H "Authorization: token ${GH_TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary @"${FILE}" \
+              "${GH_UPLOAD_URL}?name=${FILENAME}" \
+              >/dev/null
+            echo "  GitHub: ok"
           }
 
-          $giteaRelease = Invoke-JsonCurl @(
-            "-fsS", "-H", "Authorization: token $env:GITEA_TOKEN",
-            "$API_BASE/repos/$REPO/releases/tags/$TAG_NAME"
-          )
-          $ghRelease = Invoke-JsonCurl @(
-            "-fsS", "-H", "Authorization: token $env:GH_TOKEN",
-            "https://api.github.com/repos/$GITHUB_REPO/releases/tags/$TAG_NAME"
-          )
-          # GitHub returns upload_url like .../assets{?name,label}
-          $ghUploadUrl = [string]$ghRelease.upload_url
-          if ([string]::IsNullOrWhiteSpace($ghUploadUrl)) {
-            throw "GitHub release $($ghRelease.id) has no upload_url"
-          }
-          $ghUploadUrl = $ghUploadUrl -replace '\{\?[^}]*\}', ''
-          Write-Host "GitHub upload base: $ghUploadUrl"
-
-          function Upload-One([string]$File) {
-            $filename = [System.IO.Path]::GetFileName($File)
-            $sizeMb = [math]::Round((Get-Item $File).Length / 1MB, 1)
-            Write-Host "Uploading $filename (${sizeMb} MB)..."
-
-            $giteaAssets = Invoke-JsonCurl @(
-              "-fsS", "-H", "Authorization: token $env:GITEA_TOKEN",
-              "$API_BASE/repos/$REPO/releases/$($giteaRelease.id)/assets"
-            )
-            foreach ($asset in @($giteaAssets)) {
-              if ($asset.name -eq $filename) {
-                & curl.exe -fsS -X DELETE -H "Authorization: token $env:GITEA_TOKEN" `
-                  "$API_BASE/repos/$REPO/releases/$($giteaRelease.id)/assets/$($asset.id)" | Out-Null
-              }
-            }
-
-            & curl.exe -fsS --max-time 0 --retry 5 --retry-delay 10 `
-              -X POST `
-              -H "Authorization: token $env:GITEA_TOKEN" `
-              -H "Content-Type: application/octet-stream" `
-              --data-binary "@$File" `
-              "$API_BASE/repos/$REPO/releases/$($giteaRelease.id)/assets?name=$filename" | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw "Gitea upload failed for $filename" }
-            Write-Host "  Gitea: ok"
-
-            $ghAssets = Invoke-JsonCurl @(
-              "-fsS", "-H", "Authorization: token $env:GH_TOKEN",
-              "https://api.github.com/repos/$GITHUB_REPO/releases/$($ghRelease.id)/assets"
-            )
-            foreach ($asset in @($ghAssets)) {
-              if ($asset.name -eq $filename) {
-                & curl.exe -fsS -X DELETE -H "Authorization: token $env:GH_TOKEN" `
-                  "https://api.github.com/repos/$GITHUB_REPO/releases/assets/$($asset.id)" | Out-Null
-              }
-            }
-
-            # Brace the variable — `$url?name=` is parsed as PowerShell's null-conditional.
-            $ghAssetUrl = "${ghUploadUrl}?name=$([uri]::EscapeDataString($filename))"
-            Write-Host "  GitHub URL: $ghAssetUrl"
-            & curl.exe -fsS --max-time 0 --retry 5 --retry-delay 10 `
-              -X POST `
-              -H "Authorization: token $env:GH_TOKEN" `
-              -H "Content-Type: application/octet-stream" `
-              --data-binary "@$File" `
-              $ghAssetUrl | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw "GitHub upload failed for $filename" }
-            Write-Host "  GitHub: ok"
-          }
-
-          Get-ChildItem -Path dist-electron -File |
-            Where-Object { $_.Name -like 'Paarrot-*-win-x64.exe' -or $_.Name -eq 'latest.yml' } |
-            ForEach-Object { Upload-One $_.FullName }
+          shopt -s nullglob
+          for FILE in dist-electron/Paarrot-*-win-x64.exe dist-electron/latest.yml; do
+            upload_one "$FILE"
+          done
       
       - name: List build output
-        shell: powershell
         run: |
-          Get-ChildItem -Path dist-electron -Recurse | Select-Object FullName
+          find dist-electron -type f -printf '%p\n' | sort
 
   build-linux:
     runs-on: ubuntu-latest
