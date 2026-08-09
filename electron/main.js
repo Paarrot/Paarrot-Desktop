@@ -1278,8 +1278,21 @@ ipcMain.handle('open-external-url', async (event, url) => {
 // Read clipboard image
 ipcMain.handle('read-clipboard-image', async () => {
   try {
+    // Extra Things: only trust an image when the clipboard actually advertises one.
+    // On Linux, readImage() can return a stale bitmap after copying plain text/URLs.
+    const formats = clipboard.availableFormats();
+    const hasImageFormat = formats.some((format) => format.startsWith('image/'));
+    if (!hasImageFormat) {
+      return { success: true, data: null };
+    }
+
     const image = clipboard.readImage();
     if (image.isEmpty()) {
+      return { success: true, data: null };
+    }
+
+    const { width, height } = image.getSize();
+    if (width < 2 || height < 2) {
       return { success: true, data: null };
     }
     
