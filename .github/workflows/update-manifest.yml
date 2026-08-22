@@ -4,7 +4,7 @@ on:
   push:
     paths:
       - 'cinny/public/update/*.md'
-      - 'scripts/generate-update-manifest.mjs'
+      - 'cinny/scripts/generate-update-manifest.mjs'
 
 permissions:
   contents: write
@@ -20,7 +20,7 @@ jobs:
           node-version: '20'
 
       - name: Generate manifest.json
-        run: node scripts/generate-update-manifest.mjs
+        run: node cinny/scripts/generate-update-manifest.mjs
 
       - name: Commit manifest if changed
         run: |
