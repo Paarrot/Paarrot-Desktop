@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, clipboard, session, desktopCapturer } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Tray, Menu, nativeImage, clipboard, session, desktopCapturer, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { exec, execFile, execFileSync } = require('child_process');
@@ -1272,6 +1272,83 @@ ipcMain.handle('open-external-url', async (event, url) => {
     return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
+  }
+});
+
+/**
+ * Save a media blob from the renderer via a native Save dialog.
+ * Payload: { filename, mimeType?, data: Uint8Array | ArrayBuffer | number[] }
+ */
+ipcMain.handle('media:save-file', async (event, payload = {}) => {
+  try {
+    const filename = typeof payload.filename === 'string' && payload.filename.trim()
+      ? path.basename(payload.filename.trim()) || 'download'
+      : 'download';
+    const mimeType = typeof payload.mimeType === 'string' ? payload.mimeType : '';
+    const raw = payload.data;
+    if (!raw) {
+      return { success: false, error: 'Missing file data' };
+    }
+
+    const buffer = Buffer.from(
+      raw instanceof ArrayBuffer
+        ? new Uint8Array(raw)
+        : ArrayBuffer.isView(raw)
+          ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
+          : raw
+    );
+
+    const ext = path.extname(filename).replace(/^\./, '').toLowerCase();
+    const filters = (() => {
+      if (mimeType.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'].includes(ext)) {
+        return [
+          { name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg'] },
+          { name: 'All Files', extensions: ['*'] },
+        ];
+      }
+      if (mimeType.startsWith('video/') || ['mp4', 'webm', 'mkv', 'mov'].includes(ext)) {
+        return [
+          { name: 'Videos', extensions: ['mp4', 'webm', 'mkv', 'mov'] },
+          { name: 'All Files', extensions: ['*'] },
+        ];
+      }
+      if (mimeType.startsWith('audio/') || ['mp3', 'ogg', 'wav', 'm4a', 'flac'].includes(ext)) {
+        return [
+          { name: 'Audio', extensions: ['mp3', 'ogg', 'wav', 'm4a', 'flac'] },
+          { name: 'All Files', extensions: ['*'] },
+        ];
+      }
+      if (mimeType === 'application/pdf' || ext === 'pdf') {
+        return [
+          { name: 'PDF', extensions: ['pdf'] },
+          { name: 'All Files', extensions: ['*'] },
+        ];
+      }
+      if (ext) {
+        return [
+          { name: ext.toUpperCase(), extensions: [ext] },
+          { name: 'All Files', extensions: ['*'] },
+        ];
+      }
+      return [{ name: 'All Files', extensions: ['*'] }];
+    })();
+
+    const win = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+    const result = await dialog.showSaveDialog(win || undefined, {
+      title: 'Save file',
+      defaultPath: filename,
+      filters,
+    });
+
+    if (result.canceled || !result.filePath) {
+      return { success: true, canceled: true };
+    }
+
+    await fs.promises.writeFile(result.filePath, buffer);
+    return { success: true, path: result.filePath };
+  } catch (error) {
+    console.error('[media:save-file] failed:', error);
+    return { success: false, error: error.message || String(error) };
   }
 });
 

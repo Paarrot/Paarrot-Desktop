@@ -104,6 +104,12 @@ contextBridge.exposeInMainWorld('electron', {
     readImage: () => ipcRenderer.invoke('read-clipboard-image'),
     writeText: (text) => ipcRenderer.invoke('write-clipboard-text', text)
   },
+
+  // Media save (native Save dialog for images / videos / files)
+  media: {
+    saveFile: ({ filename, mimeType, data }) =>
+      ipcRenderer.invoke('media:save-file', { filename, mimeType, data }),
+  },
     // Audio
   audio: {
     playNotificationSound: (soundType = 'message') => ipcRenderer.invoke('play-notification-sound', soundType),
