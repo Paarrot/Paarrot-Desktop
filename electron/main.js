@@ -8,6 +8,7 @@ const openPkg = require('open');
 const open = openPkg.default;
 const openApps = openPkg.apps;
 const PaarrotAPIServer = require('./api-server');
+const { createDiscordCollectiblesService } = require('./discord-collectibles');
 const https = require('https');
 const http = require('http');
 const AdmZip = require('adm-zip');
@@ -104,6 +105,7 @@ function isAppOwnedUrl(targetUrl, currentUrl) {
 const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 const store = new Store();
+const discordCollectibles = createDiscordCollectiblesService(store);
 const PROTOCOL_SCHEME = 'paarrot';
 
 let mainWindow = null;
@@ -1897,6 +1899,55 @@ ipcMain.handle('plugin:read-code', async (event, pluginId) => {
     return { success: true, data: code };
   } catch (error) {
     console.error('Failed to read plugin code:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('discord-collectibles:has-token', () => {
+  return { success: true, data: discordCollectibles.hasToken() };
+});
+
+ipcMain.handle('discord-collectibles:set-token', (event, { token }) => {
+  try {
+    return discordCollectibles.setToken(token);
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('discord-collectibles:clear-token', () => {
+  try {
+    return discordCollectibles.clearToken();
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('discord-collectibles:fetch-catalog', async (event, { force } = {}) => {
+  try {
+    return await discordCollectibles.getCatalog({ force: Boolean(force) });
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('discord-collectibles:download-assets', async (event, { assets }) => {
+  try {
+    if (!Array.isArray(assets) || assets.length === 0) {
+      return { success: false, error: 'No assets to download' };
+    }
+    const downloaded = await discordCollectibles.downloadAssets(assets);
+    return {
+      success: true,
+      data: downloaded.map((item) => ({
+        role: item.role,
+        url: item.url,
+        filename: item.filename,
+        mimeType: item.mimeType,
+        data: item.data,
+      })),
+    };
+  } catch (error) {
     return { success: false, error: error.message };
   }
 });
