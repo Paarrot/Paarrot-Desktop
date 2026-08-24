@@ -1425,49 +1425,54 @@ ipcMain.handle('play-notification-sound', async (event, soundType = 'message') =
   }
 });
 
-// Get YouTube stream using yt-dlp
-ipcMain.handle('get-youtube-stream', async (event, url) => {
+// Get a direct YouTube stream using yt-dlp.
+async function getYouTubeStream(url) {
   try {
-    // Check if yt-dlp is available
     try {
-      await execAsync('yt-dlp --version');
+      await execFileAsync('yt-dlp', ['--version']);
     } catch {
-      return { 
-        success: false, 
-        error: 'yt-dlp is not installed. Please install yt-dlp to use YouTube features.' 
+      return {
+        success: false,
+        error: 'yt-dlp is not installed. Please install yt-dlp to use YouTube features.',
       };
     }
 
-    // Get title
     let title = 'YouTube Video';
     try {
-      const titleResult = await execAsync(`yt-dlp --get-title "${url}"`);
+      const titleResult = await execFileAsync('yt-dlp', ['--no-playlist', '--get-title', url]);
       title = titleResult.stdout.trim();
     } catch (e) {
       console.warn('Failed to get video title:', e.message);
     }
 
-    // Get video URL
-    const result = await execAsync(
-      `yt-dlp -g -f "best[height<=1080]/bestvideo[height<=1080]+bestaudio/best" "${url}"`
-    );
-    
+    const result = await execFileAsync('yt-dlp', [
+      '--no-playlist',
+      '-g',
+      '-f',
+      'best[height<=1080]/bestvideo[height<=1080]+bestaudio/best',
+      url,
+    ]);
     const videoUrl = result.stdout.trim().split('\n')[0];
-    
+
     if (!videoUrl) {
       return { success: false, error: 'yt-dlp returned empty URL' };
     }
 
-    return { 
-      success: true, 
-      data: { video_url: videoUrl, title } 
+    return {
+      success: true,
+      data: { video_url: videoUrl, title },
     };
   } catch (error) {
-    return { 
-      success: false, 
-      error: `yt-dlp error: ${error.message}` 
+    return {
+      success: false,
+      error: `yt-dlp error: ${error.message}`,
     };
   }
+}
+
+// Get YouTube stream using yt-dlp
+ipcMain.handle('get-youtube-stream', async (event, url) => {
+  return getYouTubeStream(url);
 });
 
 // Background sync stubs (desktop doesn't need it)
