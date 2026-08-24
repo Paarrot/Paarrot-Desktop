@@ -1903,26 +1903,6 @@ ipcMain.handle('plugin:read-code', async (event, pluginId) => {
   }
 });
 
-ipcMain.handle('discord-collectibles:has-token', () => {
-  return { success: true, data: discordCollectibles.hasToken() };
-});
-
-ipcMain.handle('discord-collectibles:set-token', (event, { token }) => {
-  try {
-    return discordCollectibles.setToken(token);
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-});
-
-ipcMain.handle('discord-collectibles:clear-token', () => {
-  try {
-    return discordCollectibles.clearToken();
-  } catch (error) {
-    return { success: false, error: error.message };
-  }
-});
-
 ipcMain.handle('discord-collectibles:fetch-catalog', async (event, { force } = {}) => {
   try {
     return await discordCollectibles.getCatalog({ force: Boolean(force) });

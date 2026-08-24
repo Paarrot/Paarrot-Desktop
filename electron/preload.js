@@ -195,11 +195,8 @@ contextBridge.exposeInMainWorld('electron', {
     repair: () => ipcRenderer.invoke('protocol:repair')
   },
 
-  // Discord shop collectibles (catalog + on-demand CDN download)
+  // Discord shop collectibles (published catalog + on-demand CDN download)
   discordCollectibles: {
-    hasToken: () => ipcRenderer.invoke('discord-collectibles:has-token'),
-    setToken: (token) => ipcRenderer.invoke('discord-collectibles:set-token', { token }),
-    clearToken: () => ipcRenderer.invoke('discord-collectibles:clear-token'),
     fetchCatalog: (force = false) => ipcRenderer.invoke('discord-collectibles:fetch-catalog', { force }),
     downloadAssets: (assets) => ipcRenderer.invoke('discord-collectibles:download-assets', { assets }),
   },
