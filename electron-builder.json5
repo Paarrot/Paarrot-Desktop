@@ -102,7 +102,7 @@
     "shortcutName": "Paarrot",
     "differentialPackage": false
   },
-  "compression": "store",
+  "compression": "normal",
   "publish": [
     {
       "provider": "github",
