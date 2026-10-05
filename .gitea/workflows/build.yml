@@ -12,12 +12,14 @@ on:
 # Build jobs publish assets straight to Gitea/GitHub releases via the REST API.
 
 jobs:
-  increment-version:
+  prepare:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.finalize.outputs.VERSION }}
+      tag: ${{ steps.finalize.outputs.TAG_NAME }}
+      commit_sha: ${{ steps.finalize.outputs.COMMIT_SHA }}
       should_build: ${{ steps.decide.outputs.SHOULD_BUILD }}
-    
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -49,15 +51,15 @@ jobs:
           echo "Current version: $CURRENT"
           echo "Should bump: $SHOULD_BUMP"
           echo "Should build: $SHOULD_BUILD"
-      
+
       - name: Bump patch version
         id: bump
-        if: ${{ steps.decide.outputs.SHOULD_BUMP == 'true' }}
+        if: steps.decide.outputs.SHOULD_BUILD == 'true' && steps.decide.outputs.SHOULD_BUMP == 'true'
         run: |
           # Get current version from package.json
           CURRENT=$(grep -Po '"version":\s*"\K[^"]+' package.json | head -1)
           echo "Current version: $CURRENT"
-          
+
           # Split and increment patch
           MAJOR=$(echo $CURRENT | cut -d. -f1)
           MINOR=$(echo $CURRENT | cut -d. -f2)
@@ -65,17 +67,17 @@ jobs:
           NEW_PATCH=$((PATCH + 1))
           NEW_VERSION="${MAJOR}.${MINOR}.${NEW_PATCH}"
           echo "New version: $NEW_VERSION"
-          
+
           # Update package.json
           sed -i "s/\"version\": \"${CURRENT}\"/\"version\": \"${NEW_VERSION}\"/" package.json
-          
+
           # Verify the change
           grep '"version"' package.json | head -1
-          
+
           echo "VERSION=$NEW_VERSION" >> $GITHUB_OUTPUT
-      
+
       - name: Commit and push version bump
-        if: ${{ steps.decide.outputs.SHOULD_BUMP == 'true' }}
+        if: steps.decide.outputs.SHOULD_BUILD == 'true' && steps.decide.outputs.SHOULD_BUMP == 'true'
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
@@ -99,50 +101,24 @@ jobs:
           echo "Failed to push version bump after 3 attempts"
           exit 1
 
-      - name: Finalize version output
+      - name: Resolve version and commit
         id: finalize
+        if: steps.decide.outputs.SHOULD_BUILD == 'true'
         run: |
           if [ -n "${{ steps.bump.outputs.VERSION }}" ]; then
-            echo "VERSION=${{ steps.bump.outputs.VERSION }}" >> $GITHUB_OUTPUT
-          else
-            echo "VERSION=${{ steps.decide.outputs.CURRENT_VERSION }}" >> $GITHUB_OUTPUT
-          fi
-
-  prepare-release:
-    runs-on: ubuntu-latest
-    needs: increment-version
-    if: always() && needs.increment-version.outputs.should_build == 'true'
-    outputs:
-      version: ${{ steps.version.outputs.VERSION }}
-      tag: ${{ steps.version.outputs.TAG_NAME }}
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.ref_name }}
-      
-      - name: Pull latest (after version bump)
-        if: github.ref == 'refs/heads/main'
-        run: git pull origin main
-      
-      - name: Resolve version
-        id: version
-        run: |
-          if [ -n "${{ needs.increment-version.outputs.version }}" ]; then
-            VERSION="${{ needs.increment-version.outputs.version }}"
+            VERSION="${{ steps.bump.outputs.VERSION }}"
           else
             VERSION=$(grep -Po '"version":\s*"\K[^"]+' package.json | head -1)
           fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "TAG_NAME=v$VERSION" >> $GITHUB_OUTPUT
+          echo "COMMIT_SHA=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
-      
+
       - name: Create and push tag
+        if: steps.decide.outputs.SHOULD_BUILD == 'true'
         run: |
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          TAG_NAME="v${VERSION}"
+          TAG_NAME="${{ steps.finalize.outputs.TAG_NAME }}"
           if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
             echo "Tag $TAG_NAME already exists"
           else
@@ -151,14 +127,15 @@ jobs:
             git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
             git push origin "$TAG_NAME"
           fi
-      
+
       - name: Ensure Gitea release
+        if: steps.decide.outputs.SHOULD_BUILD == 'true'
         env:
           GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          TAG_NAME="v${VERSION}"
+          VERSION="${{ steps.finalize.outputs.VERSION }}"
+          TAG_NAME="${{ steps.finalize.outputs.TAG_NAME }}"
           API_BASE="${{ github.server_url }}/api/v1"
           REPO="${{ github.repository }}"
 
@@ -175,14 +152,15 @@ jobs:
           fi
 
           echo "Gitea release id: ${RELEASE_ID}"
-      
+
       - name: Ensure GitHub release
+        if: steps.decide.outputs.SHOULD_BUILD == 'true'
         env:
           GH_TOKEN: ${{ secrets.GHTOKEN }}
         run: |
           set -euo pipefail
-          VERSION="${{ steps.version.outputs.VERSION }}"
-          TAG_NAME="v${VERSION}"
+          VERSION="${{ steps.finalize.outputs.VERSION }}"
+          TAG_NAME="${{ steps.finalize.outputs.TAG_NAME }}"
           GITHUB_REPO="Paarrot/Paarrot-Desktop"
 
           RELEASE_ID=$(curl -fsS -H "Authorization: token ${GH_TOKEN}" \
@@ -201,15 +179,16 @@ jobs:
 
   build-windows:
     runs-on: ubuntu-latest
-    needs: [increment-version, prepare-release]
-    if: always() && needs.prepare-release.result == 'success'
-    
+    needs: prepare
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.should_build == 'true'
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: false
-          ref: ${{ github.ref_name }}
+          fetch-depth: 1
+          ref: ${{ needs.prepare.outputs.commit_sha }}
 
       - name: Checkout submodules manually
         run: |
@@ -238,27 +217,31 @@ jobs:
 
           echo "Resolved submodule commit:"
           git -C cinny rev-parse HEAD
-      
-      - name: Pull latest (after version bump)
-        if: github.ref == 'refs/heads/main'
-        run: git pull origin main
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            cinny/package-lock.json
+
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-
 
       - name: Install Wine (NSIS cross-build)
         run: |
           set -euo pipefail
-          # electron-builder spawns `wine` by name; wine64 alone is not enough.
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            wine \
-            wine64 \
-            wine32 \
-            || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wine64
+          # electron-builder spawns `wine` by name; wine64 alone is enough, wine32
+          # only adds a slow i386 package index for no benefit here.
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wine64
 
           if ! command -v wine >/dev/null 2>&1; then
             WINE64_BIN=$(command -v wine64)
@@ -268,31 +251,27 @@ jobs:
 
           command -v wine
           wine --version
-      
+
       - name: Install dependencies (root)
         run: npm ci --prefer-offline
-      
+
       - name: Install dependencies (cinny)
         working-directory: ./cinny
         run: npm ci --prefer-offline
-      
-      - name: Clean previous builds
-        run: |
-          rm -rf cinny/dist dist-electron
-      
+
       - name: Build Electron app
         run: npm run build:local -- --win
         env:
           GH_TOKEN: ${{ secrets.GHTOKEN }}
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      
+
       - name: Upload Windows assets to releases
         env:
           GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GHTOKEN }}
         run: |
           set -euo pipefail
-          TAG_NAME="${{ needs.prepare-release.outputs.tag }}"
+          TAG_NAME="${{ needs.prepare.outputs.tag }}"
           API_BASE="${{ github.server_url }}/api/v1"
           REPO="${{ github.repository }}"
           GITHUB_REPO="Paarrot/Paarrot-Desktop"
@@ -349,22 +328,23 @@ jobs:
           for FILE in dist-electron/Paarrot-*-win-x64.exe dist-electron/latest.yml; do
             upload_one "$FILE"
           done
-      
+
       - name: List build output
         run: |
           find dist-electron -type f -printf '%p\n' | sort
 
   build-linux:
     runs-on: ubuntu-latest
-    needs: [increment-version, prepare-release]
-    if: always() && needs.prepare-release.result == 'success'
-    
+    needs: prepare
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.should_build == 'true'
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: false
-          ref: ${{ github.ref_name }}
+          fetch-depth: 1
+          ref: ${{ needs.prepare.outputs.commit_sha }}
 
       - name: Checkout submodules manually
         run: |
@@ -393,40 +373,44 @@ jobs:
 
           echo "Resolved submodule commit:"
           git -C cinny rev-parse HEAD
-      
-      - name: Pull latest (after version bump)
-        if: github.ref == 'refs/heads/main'
-        run: git pull origin main
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      
+          cache: 'npm'
+          cache-dependency-path: |
+            package-lock.json
+            cinny/package-lock.json
+
+      - name: Cache Electron downloads
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: electron-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-
+
       - name: Install dependencies (root)
         run: npm ci --prefer-offline
-      
+
       - name: Install dependencies (cinny)
         working-directory: ./cinny
         run: npm ci --prefer-offline
-      
-      - name: Clean previous builds
-        run: |
-          rm -rf cinny/dist dist-electron
-      
+
       - name: Build Electron app
         run: npm run build:local -- --linux
         env:
           GH_TOKEN: ${{ secrets.GHTOKEN }}
-      
+
       - name: Upload Linux assets to releases
         env:
           GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GHTOKEN }}
         run: |
           set -euo pipefail
-          VERSION="${{ needs.prepare-release.outputs.version }}"
-          TAG_NAME="${{ needs.prepare-release.outputs.tag }}"
+          TAG_NAME="${{ needs.prepare.outputs.tag }}"
           API_BASE="${{ github.server_url }}/api/v1"
           REPO="${{ github.repository }}"
           GITHUB_REPO="Paarrot/Paarrot-Desktop"
@@ -486,16 +470,16 @@ jobs:
 
   finalize-release:
     runs-on: ubuntu-latest
-    needs: [increment-version, prepare-release, build-windows, build-linux]
-    if: always() && needs.prepare-release.result == 'success' && (needs.build-windows.result == 'success' || needs.build-linux.result == 'success')
-    
+    needs: [prepare, build-windows, build-linux]
+    if: always() && needs.prepare.result == 'success' && needs.prepare.outputs.should_build == 'true' && (needs.build-windows.result == 'success' || needs.build-linux.result == 'success')
+
     steps:
       - name: Cleanup old Gitea releases
         env:
           GITEA_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          TAG_NAME="${{ needs.prepare-release.outputs.tag }}"
+          TAG_NAME="${{ needs.prepare.outputs.tag }}"
           API_BASE="${{ github.server_url }}/api/v1"
           REPO="${{ github.repository }}"
 
@@ -515,13 +499,13 @@ jobs:
                 "${API_BASE}/repos/${REPO}/tags/${OLD_TAG}" >/dev/null || true
             fi
           done
-      
+
       - name: Cleanup old GitHub releases
         env:
           GH_TOKEN: ${{ secrets.GHTOKEN }}
         run: |
           set -euo pipefail
-          TAG_NAME="${{ needs.prepare-release.outputs.tag }}"
+          TAG_NAME="${{ needs.prepare.outputs.tag }}"
           GITHUB_REPO="Paarrot/Paarrot-Desktop"
 
           echo "Cleaning up old GitHub releases (keeping ${TAG_NAME})..."
