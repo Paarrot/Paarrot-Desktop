@@ -14,6 +14,7 @@ on:
 # actions/cache works on the self-hosted runner (pizzabox): act_runner runs its own
 # cache server, so its port must be reachable from the job container. Fixed ports
 # (34085 docker runner, 34086 host runner) plus a ufw rule for the docker range.
+# Saves are confirmed working, so runs after the first should hit.
 
 jobs:
   prepare:
