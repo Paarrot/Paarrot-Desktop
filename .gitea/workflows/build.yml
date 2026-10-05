@@ -241,6 +241,8 @@ jobs:
           set -euo pipefail
           # electron-builder spawns `wine` by name; wine64 alone is enough, wine32
           # only adds a slow i386 package index for no benefit here.
+          # Runner images have a stale apt index, so wine64 is not locatable without an update.
+          sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wine64
 
           if ! command -v wine >/dev/null 2>&1; then
