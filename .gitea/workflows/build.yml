@@ -249,6 +249,8 @@ jobs:
           # so this is normally a no-op. Fallback below covers runners without it.
           # (act_runner takes the image from the label stored in Gitea, so the baked
           # image is tagged as gitea/runner-images:ubuntu-latest on that host.)
+          # force_pull must stay false on that runner, otherwise the shadowed tag is
+          # replaced by the upstream image and this step installs wine again.
           # NSIS's makensis.exe is 32-bit, so wine32 is required; the wine64 package
           # alone ships only /usr/lib/wine/wine64 (no `wine` on PATH).
           if command -v wine >/dev/null 2>&1; then
