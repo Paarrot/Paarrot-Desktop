@@ -11,9 +11,9 @@ on:
 # Large AppImage/exe uploads time out on Gitea's actions artifact pipeline.
 # Build jobs publish assets straight to Gitea/GitHub releases via the REST API.
 
-# actions/cache works on the self-hosted runner (pizzabox) because act_runner's
-# cache server uses fixed ports there (34085 for the docker runner, 34086 for the
-# host runner) and those ports are allowed through its firewall.
+# actions/cache works on the self-hosted runner (pizzabox): act_runner runs its own
+# cache server, so its port must be reachable from the job container. Fixed ports
+# (34085 docker runner, 34086 host runner) plus a ufw rule for the docker range.
 
 jobs:
   prepare:
