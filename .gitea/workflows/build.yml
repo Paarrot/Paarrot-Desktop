@@ -244,14 +244,15 @@ jobs:
       - name: Install Wine (NSIS cross-build)
         run: |
           set -euo pipefail
-          # electron-builder spawns `wine` by name; wine64 alone is enough, wine32
-          # only adds a slow i386 package index for no benefit here.
-          # Runner images have a stale apt index, so wine64 is not locatable without an update.
+          # NSIS's makensis.exe is 32-bit, so wine32 is required. The wine64 package
+          # alone ships only /usr/lib/wine/wine64 (no `wine` on PATH), so install the
+          # `wine` meta package too. Runner images have a stale apt index, so update first.
+          sudo dpkg --add-architecture i386
           sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wine64
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends wine wine32 wine64
 
           if ! command -v wine >/dev/null 2>&1; then
-            WINE64_BIN=$(command -v wine64)
+            WINE64_BIN=$(command -v wine64 || echo /usr/lib/wine/wine64)
             echo "No wine binary; linking wine64 -> /usr/local/bin/wine (${WINE64_BIN})"
             sudo ln -sf "${WINE64_BIN}" /usr/local/bin/wine
           fi
