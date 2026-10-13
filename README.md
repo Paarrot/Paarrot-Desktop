@@ -38,7 +38,7 @@ Paarrot includes a plugin system for extending and customising the app with Java
 
 1. Drop a plugin folder into your plugins directory:
    - **Windows**: `%APPDATA%\paarrot\plugins\<plugin-name>\`
-   - **Linux**: `~/.config/Paarrot/plugins/<plugin-name>/`
+   - **Linux**: `~/.config/Paarrot/plugins/<plugin-name>/` for the packaged app, `~/.config/paarrot/plugins/<plugin-name>/` when running from source
    - **macOS**: `~/Library/Application Support/Paarrot/plugins/<plugin-name>/`
 2. Enable it in **Settings → Plugins → Installed**
 

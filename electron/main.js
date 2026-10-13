@@ -1758,7 +1758,7 @@ ipcMain.handle('plugin:download', async (event, { pluginId, downloadUrl, name })
           });
         }
       }).on('error', (err) => {
-        fs.unlinkSync(tempZipPath);
+        fs.rmSync(tempZipPath, { force: true });
         reject(err);
       });
     });
@@ -1788,13 +1788,14 @@ ipcMain.handle('plugin:download', async (event, { pluginId, downloadUrl, name })
       }
     }
     
-    // Move contents to final plugin directory
+    // Move contents to final plugin directory. renameSync throws EXDEV when
+    // temp and userData are on different filesystems (Linux: /tmp is tmpfs).
     fs.mkdirSync(pluginDir, { recursive: true });
     const files = fs.readdirSync(sourceDir);
     for (const file of files) {
       const srcPath = path.join(sourceDir, file);
       const destPath = path.join(pluginDir, file);
-      fs.renameSync(srcPath, destPath);
+      fs.cpSync(srcPath, destPath, { recursive: true });
     }
     
     // Clean up temp extract dir
