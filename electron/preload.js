@@ -124,6 +124,11 @@ contextBridge.exposeInMainWorld('electron', {
   youtube: {
     getStream: (url) => ipcRenderer.invoke('get-youtube-stream', url)
   },
+
+  // TikTok oEmbed (fetched in the main process)
+  tiktok: {
+    getOEmbed: (url) => ipcRenderer.invoke('tiktok:oembed', url)
+  },
   
   // Background sync (stubs for desktop)
   sync: {

@@ -1475,6 +1475,28 @@ ipcMain.handle('get-youtube-stream', async (event, url) => {
   return getYouTubeStream(url);
 });
 
+// TikTok oEmbed. TikTok blocks the Electron user agent, so this runs in the main
+// process with a plain browser UA and is not subject to CORS.
+ipcMain.handle('tiktok:oembed', async (event, url) => {
+  try {
+    const response = await fetch(`https://www.tiktok.com/oembed?url=${encodeURIComponent(url)}`, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+        Accept: 'application/json',
+      },
+    });
+    if (!response.ok) {
+      console.warn('[tiktok:oembed]', response.status, url);
+      return null;
+    }
+    return await response.json();
+  } catch (error) {
+    console.warn('[tiktok:oembed] failed:', error?.message || error);
+    return null;
+  }
+});
+
 // Background sync stubs (desktop doesn't need it)
 ipcMain.handle('start-background-sync', async () => {
   return { success: true };
