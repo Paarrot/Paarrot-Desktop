@@ -20,8 +20,7 @@
     "build:linux": "npm run build -- --linux",
     "build:win": "npm run build -- --win",
     "postman:generate": "node scripts/generate-postman-collection.js",
-    "generate:update-manifest": "node scripts/generate-update-manifest.mjs",
-    "playground": "npm --prefix cinny run playground"
+    "generate:update-manifest": "node scripts/generate-update-manifest.mjs"
   },
   "keywords": [],
   "author": {
