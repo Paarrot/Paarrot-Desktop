@@ -59,6 +59,7 @@ jobs:
         env:
           API_BASE: ${{ github.server_url }}/api/v1
           REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
           # Prefer a PAT with issue write scope (secret: GITEA_TOKEN).
           # Default GITHUB_TOKEN is usually scoped to this repo only.
           GITEA_TOKEN: ${{ secrets.GITEA_TOKEN }}
