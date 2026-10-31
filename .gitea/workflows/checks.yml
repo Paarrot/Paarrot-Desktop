@@ -58,6 +58,8 @@ jobs:
       - name: Run checks
         env:
           API_BASE: ${{ github.server_url }}/api/v1
+          # github.server_url is the internal runner host, so the commit link needs the public one.
+          WEB_BASE: https://git.ruv.wtf
           REPO: ${{ github.repository }}
           SHA: ${{ github.sha }}
           # Prefer a PAT with issue write scope (secret: GITEA_TOKEN).
