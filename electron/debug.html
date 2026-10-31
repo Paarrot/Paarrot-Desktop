@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Debug Packets</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #14161a; color: #d9dce1; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  main { display: flex; flex-direction: column; height: 100vh; }
+  header { display: flex; gap: 8px; align-items: center; padding: 8px; border-bottom: 1px solid #262a31; flex-wrap: wrap; }
+  input[type="search"] { flex: 1 1 160px; min-width: 120px; background: #1b1f25; color: inherit; border: 1px solid #2b3038; border-radius: 4px; padding: 6px 8px; font: inherit; }
+  button { background: #1b1f25; color: inherit; border: 1px solid #2b3038; border-radius: 4px; padding: 6px 10px; font: inherit; cursor: pointer; }
+  button:hover { border-color: #3b424d; }
+  label { display: flex; gap: 6px; align-items: center; }
+  #count { color: #8b93a1; }
+  #list { flex: 1; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid #21252b; white-space: nowrap; }
+  th { position: sticky; top: 0; background: #171a1f; color: #8b93a1; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover, tbody tr.sel { background: #1b1f25; }
+  #detail { max-height: 40vh; overflow: auto; margin: 0; padding: 10px; border-top: 1px solid #262a31; white-space: pre-wrap; word-break: break-word; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <input id="filter" type="search" placeholder="Filter (method, path, status, txnId, eventId, body)" aria-label="Filter packets">
+    <label><input id="autoscroll" type="checkbox" checked> Autoscroll</label>
+    <button id="clear">Clear</button>
+    <button id="copy">Copy all</button>
+    <button id="download">Download JSON lines</button>
+    <span id="count">0</span>
+  </header>
+  <div id="list">
+    <table>
+      <thead>
+        <tr><th>Time</th><th>Phase</th><th>Method</th><th>Path</th><th>Status</th><th>ms</th><th>txnId / eventId</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <pre id="detail"></pre>
+</main>
+<script>
+  const MAX = 2000;
+  const packets = [];
+  const rows = document.getElementById('rows');
+  const list = document.getElementById('list');
+  const detail = document.getElementById('detail');
+  const filter = document.getElementById('filter');
+  const autoscroll = document.getElementById('autoscroll');
+  const count = document.getElementById('count');
+
+  const text = (v) => (v === undefined || v === null ? '' : String(v));
+
+  function matches(p) {
+    const q = filter.value.trim().toLowerCase();
+    if (!q) return true;
+    return [p.method, p.path, p.status, p.txnId, p.eventId, p.error, p.req, p.res]
+      .some((f) => text(f).toLowerCase().includes(q));
+  }
+
+  function addRow(p) {
+    const tr = document.createElement('tr');
+    [new Date(p.ts).toLocaleTimeString(), p.phase, p.method, p.path, p.status, p.ms, p.txnId || p.eventId]
+      .forEach((v) => {
+        const td = document.createElement('td');
+        td.textContent = text(v);
+        tr.appendChild(td);
+      });
+    tr.addEventListener('click', () => {
+      document.querySelectorAll('tr.sel').forEach((r) => r.classList.remove('sel'));
+      tr.classList.add('sel');
+      detail.textContent = JSON.stringify(p, null, 2);
+    });
+    rows.appendChild(tr);
+  }
+
+  function render() {
+    rows.textContent = '';
+    packets.filter(matches).forEach(addRow);
+    count.textContent = packets.length;
+    if (autoscroll.checked) list.scrollTop = list.scrollHeight;
+  }
+
+  function add(p) {
+    packets.push(p);
+    if (packets.length > MAX) packets.shift();
+    count.textContent = packets.length;
+    if (!matches(p)) return;
+    addRow(p);
+    if (autoscroll.checked) list.scrollTop = list.scrollHeight;
+  }
+
+  filter.addEventListener('input', render);
+  document.getElementById('clear').addEventListener('click', () => {
+    packets.length = 0;
+    detail.textContent = '';
+    render();
+  });
+  const lines = () => packets.map((p) => JSON.stringify(p)).join('\n');
+
+  document.getElementById('copy').addEventListener('click', () => {
+    window.electron?.clipboard?.writeText(lines());
+  });
+  document.getElementById('download').addEventListener('click', () => {
+    window.electron?.media?.saveFile({
+      filename: 'packets.jsonl',
+      mimeType: 'application/x-jsonlines',
+      data: lines(),
+    });
+  });
+
+  // Main sends the backlog as one batch (array), later packets one at a time
+  const unsubscribe = window.electron?.debug?.onPacket((data) => {
+    (Array.isArray(data) ? data : [data]).forEach(add);
+  });
+  window.addEventListener('beforeunload', () => unsubscribe?.());
+</script>
+</body>
+</html>

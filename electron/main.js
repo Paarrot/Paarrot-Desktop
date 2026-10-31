@@ -113,6 +113,9 @@ let tray = null;
 let isQuitting = false;
 let apiServer = null;
 let pendingDeepLink = null;
+let debugWindow = null;
+const debugPacketBacklog = [];
+const DEBUG_PACKET_LIMIT = 2000;
 let protocolRegistrationState = {
   before: false,
   registerCall: false,
@@ -1957,6 +1960,49 @@ ipcMain.handle('discord-collectibles:download-assets', async (event, { assets })
     };
   } catch (error) {
     return { success: false, error: error.message };
+  }
+});
+
+// Debug packet window
+ipcMain.handle('debug:open-window', () => {
+  if (debugWindow && !debugWindow.isDestroyed()) {
+    debugWindow.focus();
+    return { success: true };
+  }
+
+  debugWindow = new BrowserWindow({
+    width: 900,
+    height: 600,
+    title: 'Debug Packets',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: true
+    }
+  });
+
+  debugWindow.on('closed', () => {
+    debugWindow = null;
+  });
+
+  // Send the backlog as one batch once the page has registered its listener
+  debugWindow.webContents.on('did-finish-load', () => {
+    debugWindow.webContents.send('debug:packet', debugPacketBacklog);
+  });
+
+  debugWindow.loadFile(path.join(__dirname, 'debug.html'));
+  return { success: true };
+});
+
+ipcMain.on('debug:packet', (event, packet) => {
+  if (!packet || typeof packet !== 'object') return;
+
+  debugPacketBacklog.push(packet);
+  if (debugPacketBacklog.length > DEBUG_PACKET_LIMIT) debugPacketBacklog.shift(); // Keep last 2000
+
+  if (debugWindow && !debugWindow.isDestroyed()) {
+    debugWindow.webContents.send('debug:packet', packet);
   }
 });
 

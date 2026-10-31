@@ -185,6 +185,17 @@ contextBridge.exposeInMainWorld('electron', {
     }
   },
   
+  // Debug packet recorder
+  debug: {
+    openWindow: () => ipcRenderer.invoke('debug:open-window'),
+    send: (packet) => ipcRenderer.send('debug:packet', packet),
+    onPacket: (callback) => {
+      const handler = (_, data) => callback(data);
+      ipcRenderer.on('debug:packet', handler);
+      return () => ipcRenderer.removeListener('debug:packet', handler);
+    }
+  },
+
   // Plugin management
   plugins: {
     getPath: () => ipcRenderer.invoke('plugin:get-path'),
