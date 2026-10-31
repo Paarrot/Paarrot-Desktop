@@ -49,6 +49,11 @@ jobs:
             SHOULD_BUILD=false
           fi
 
+          # [skip build] runs the checks workflow but skips the Electron build.
+          if echo "$COMMIT_MSG" | grep -qi '\[skip build\]'; then
+            SHOULD_BUILD=false
+          fi
+
           echo "CURRENT_VERSION=$CURRENT" >> $GITHUB_OUTPUT
           echo "SHOULD_BUMP=$SHOULD_BUMP" >> $GITHUB_OUTPUT
           echo "SHOULD_BUILD=$SHOULD_BUILD" >> $GITHUB_OUTPUT
