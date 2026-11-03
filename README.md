@@ -30,6 +30,28 @@ To build the app locally, run:
 To start local dev server, run:
 * `npm run dev`
 
+## Testing
+
+* `npm run test` - unit and E2E
+* `npm run test:unit` - Vitest
+* `npm run test:e2e` - Playwright driving Electron
+
+The E2E test drives the real Electron app against the vite dev server, so it needs the
+cinny dependencies installed and an X display. On a headless machine run it under xvfb:
+`xvfb-run -a npm run test:e2e`.
+
+The E2E test logs in to a live homeserver over the network, so it needs network access and a
+working test account. It uses a dedicated account, never a personal one:
+
+Variable | Default
+---|---
+`E2E_HOMESERVER` | `ruv.wtf`
+`E2E_USER` | `giteaci`
+`E2E_PASSWORD` | required, read from the environment, never committed
+
+A failed E2E run attaches a screenshot and the main and renderer console logs to the
+report. CI uploads `test-results/` and `playwright-report/` as artifacts.
+
 ## Plugin System
 
 Paarrot includes a plugin system for extending and customising the app with JavaScript modules.

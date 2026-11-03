@@ -20,7 +20,10 @@
     "build:linux": "npm run build -- --linux",
     "build:win": "npm run build -- --win",
     "postman:generate": "node scripts/generate-postman-collection.js",
-    "generate:update-manifest": "node scripts/generate-update-manifest.mjs"
+    "generate:update-manifest": "node scripts/generate-update-manifest.mjs",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "vitest run",
+    "test:e2e": "playwright test"
   },
   "keywords": [],
   "author": {
@@ -40,6 +43,7 @@
   "devDependencies": {
     "@actions/github": "9.1.1",
     "@electron/rebuild": "4.2.0",
+    "@playwright/test": "1.64.1",
     "concurrently": "10.0.3",
     "cross-env": "10.1.0",
     "electron": "43.1.0",
@@ -47,6 +51,7 @@
     "node-fetch": "3.3.2",
     "png2icons": "2.0.1",
     "sharp": "0.35.3",
+    "vitest": "5.1.0",
     "wait-on": "9.0.10"
   },
   "allowScripts": {
